@@ -1,0 +1,93 @@
+---
+title: "Data 621 Assignment 1"
+author: "Maliat Islam"
+date: "9/9/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+#### In this data set we are trying to identify good and bad teams in major league baseball team’s season. We are assuming some of the predictors will be higher for good teams. We will try to predict how many times a team will win in this season.
+
+```{r}
+library(dplyr)
+library(tidyverse)
+```
+```{r, include = FALSE}
+library(pacman)
+p_load(Hmisc, xlsx, xtable, knitr, scales, magrittr, tidyr, plyr, dplyr, 
+       stringr, e1071, corrplot, knitcitations, bibtex, missForest,
+       foreach, doParallel, stargazer, forecast)
+```
+
+### Exploratory Analysis:
+#### 	We can observe the response variable (TARGET_WINS) looks to be normally distributed. This supports the working theory that there are good teams and bad teams. There are also a lot of average teams.
+#### There are also quite a few variables with missing values. 
+####	Amd,Some variables are right skewed (TEAM_BASERUN_CS, TEAM_BASERUN_SB, etc.). This might support the good team theory. It may also introduce non-normally distributed residuals in the model. We shall see.
+
+
+
+
+
+
+```{r, echo=FALSE, results='asis', cache=TRUE}
+training<-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/moneyball-training-data.csv")
+```
+
+```{r}
+training %>%
+  gather(variable, value, TARGET_WINS:TEAM_FIELDING_DP) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "#3A8B63", color="#3A8B63") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+```
+```{r}
+quick_summary <- function(df){
+  df %>%
+    summary() 
+    
+}
+
+quick_summary(training)
+```
+
+```{r}
+temp <- training %>% 
+  cor(., use = "complete.obs") #%>%
+  
+temp[lower.tri(temp, diag=TRUE)] <- ""
+temp <- temp %>%
+  as.data.frame() %>%
+  rownames_to_column() %>%
+  gather(Variable, Correlation, -rowname) %>%
+  filter(Variable != rowname) %>%
+  filter(Correlation != "") %>%
+  mutate(Correlation = as.numeric(Correlation)) %>%
+  rename(` Variable` = rowname) %>%
+  arrange(desc(abs(Correlation))) 
+```
+
+### Correlations with Response Variable
+```{r}
+training %>%
+  gather(variable, value, -TARGET_WINS) %>%
+  ggplot(., aes(value, TARGET_WINS)) + 
+  geom_point(fill = "#628B3A", color="#628B3A") + 
+  geom_smooth(method = "lm", se = FALSE, color = "black") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = "Wins")
+```
+
+```{r}
+training %>% 
+  cor(., use = "complete.obs") %>%
+  corrplot(., method = "color", type = "upper", tl.col = "black", diag = FALSE)
+```
+
+
+
