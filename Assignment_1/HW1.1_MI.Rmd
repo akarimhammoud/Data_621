@@ -17,8 +17,11 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(tidyverse)
 ```
+
 ```{r, include = FALSE}
 library(pacman)
+library(here)
+
 p_load(Hmisc, xlsx, xtable, knitr, scales, magrittr, tidyr, plyr, dplyr, 
        stringr, e1071, corrplot, knitcitations, bibtex, missForest,
        foreach, doParallel, stargazer, forecast)
@@ -30,12 +33,8 @@ p_load(Hmisc, xlsx, xtable, knitr, scales, magrittr, tidyr, plyr, dplyr,
 ####	Amd,Some variables are right skewed (TEAM_BASERUN_CS, TEAM_BASERUN_SB, etc.). This might support the good team theory. It may also introduce non-normally distributed residuals in the model. We shall see.
 
 
-
-
-
-
 ```{r, echo=FALSE, results='asis', cache=TRUE}
-training<-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/moneyball-training-data.csv")
+training<-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-training-data.csv")
 ```
 
 ```{r}
@@ -88,6 +87,4 @@ training %>%
   cor(., use = "complete.obs") %>%
   corrplot(., method = "color", type = "upper", tl.col = "black", diag = FALSE)
 ```
-
-
 
