@@ -1,0 +1,76 @@
+---
+title: "HW1 Data Preparation"
+author: "Gabriella Martinez"
+date: "9/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+library(RCurl)
+library(tidyverse)
+library(naniar)
+library(UpSetR)
+```
+
+### Load the Data
+```{r}
+train <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/moneyball-training-data.csv")
+
+test <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/moneyball-evaluation-data.csv")
+```
+
+### DATA PREPARATION (25 Points)
+```{r}
+glimpse(train)
+
+glimpse(test)
+```
+
+```{r}
+#remove index column from both test and train data
+train <- train %>% 
+  select(2:17)
+test <- test %>% 
+  select(2:16)
+```
+
+
+```colSums```^[https://statisticsglobe.com/count-number-of-na-values-in-vector-and-column-in-r]
+```{r}
+#NA counts for the train data set
+colSums(is.na(train))
+```
+
+^[https://cran.r-project.org/web/packages/naniar/vignettes/naniar-visualisation.html]
+```{r}
+#visulaization and percentage of NA values
+vis_miss(train)
+```
+
+
+^[https://datavizpyr.com/visualizing-missing-data-with-barplot-in-r/]
+```{r}
+#alternative NA values visualization
+train  %>%
+  summarise_all(list(~is.na(.)))%>%
+  pivot_longer(everything(),
+               names_to = "variables", values_to="missing") %>%
+  count(variables, missing) %>%
+  ggplot(aes(y=variables,x=n,fill=missing))+
+  geom_col()
+```
+
+Since 92% of the data for the TEAM_BATTING_HBP is missing, the variable has been removed from both test and train data. TEAM_BASERUN_CS is a runner up with the next highest amount of NA at 34%.
+
+```{r}
+#removes the TEAM_BATTING_HBP due to high # of NAs
+train <- train %>% 
+  select(-c(TEAM_BATTING_HBP))
+test <- test %>% 
+  select(-c(TEAM_BATTING_HBP))
+```
