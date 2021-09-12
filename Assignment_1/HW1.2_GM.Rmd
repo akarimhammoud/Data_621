@@ -19,9 +19,9 @@ library(UpSetR)
 
 ### Load the Data
 ```{r}
-train <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/moneyball-training-data.csv")
+train <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-training-data.csv")
 
-test <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/moneyball-evaluation-data.csv")
+test <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-evaluation-data.csv")
 ```
 
 ### DATA PREPARATION (25 Points)
