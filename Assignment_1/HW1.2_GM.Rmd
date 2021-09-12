@@ -74,3 +74,36 @@ train <- train %>%
 test <- test %>% 
   select(-c(TEAM_BATTING_HBP))
 ```
+
+^[https://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/R/R-Manual/R-Manual5.html]
+```{r}
+#creates CSV in your current working directory of R
+write.csv(train_data, 'hw1_train_data.csv')
+write.csv(test_data, 'hw1_test_data.csv')
+```
+
+^[https://stats.idre.ucla.edu/r/faq/how-do-i-perform-multiple-imputation-using-predictive-mean-matching-in-r/]
+```{r}
+#build_kmeans()
+
+imputed_train_data <- mice(train_data, m=1)
+
+imputed_test_data <- mice(test_data, m=1)
+```
+
+```{r}
+#appends the imputed data to the original data
+imp_train <- complete(imputed_train_data, "long", inc = TRUE)
+
+imp_test <- complete(imputed_test_data, "long", inc = TRUE)
+```
+
+```{r}
+#Imputation Diagnostic Checks
+
+## labels observed data in blue and imputed data in red for y1
+col <- rep(c("blue", "red")[1 + as.numeric(is.na(imputed_train_data$data$TEAM_BATTING_H))], 6)
+## plots data for y1 by imputation
+stripplot(TEAM_BATTING_H ~ .imp, data = imp_train, jit = TRUE, col = col, xlab = "imputation Number")
+```
+
