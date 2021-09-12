@@ -1,0 +1,112 @@
+---
+title: "DATA 621 Homework 1"
+author: "Ken Popkin"
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(dplyr)
+library(Metrics)
+library(MLmetrics)
+```
+
+
+```{r echo=FALSE}
+# load data
+data <- read.csv('moneyball-training-data.csv')
+
+cases = dim(data)[1]
+features = dim(data)[2]
+cat('Data for this project is', cases, 'cases and', features, 'features')
+```
+
+```{r data}
+head(data,1)
+```
+
+### Create train and test data
+```{r}
+data$id <- 1:nrow(data)
+train <- data %>% dplyr::sample_frac(.75)
+test  <- dplyr::anti_join(data, train, by = 'INDEX')
+```
+
+```{r}
+cases = dim(train)[1]
+features = dim(train)[2]
+cat('Training data for this project is', cases, 'cases and', features, 'features')
+```
+
+```{r}
+cases = dim(test)[1]
+features = dim(test)[2]
+cat('Testing data for this project is', cases, 'cases and', features, 'features')
+```
+
+### First Model
+Using a manual review, below are the features selected for the first model and the supporting reason/s.
+
+TEAM_BATTING_H = Base hits by batters:  it's impossible to win in baseball without getting to the bases and hitting the ball is the primary means to accomplish this.
+
+TEAM_PITCHING_H = Hits allowed: winning without a good defense is difficult and in baseball preventing the other team from getting hits is a good defense strategy.
+
+Only two features are selected for the first model - start small and build up seems like a good approach.
+
+<B> Create the Regression Model </B>  
+```{r}
+#Select the desired data for the model
+rmdata <- train %>%
+  select(TEAM_BATTING_H, TEAM_PITCHING_H, TARGET_WINS)
+
+#Build the first model and produce a summary
+first_model <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_PITCHING_H, data = rmdata)
+summary(first_model)
+```
+
+The p values are 0, which per the criteria of "keep a feature if the p-value is <0.05" recommends that we keep both these features.  But, the adjusted R-squared is TERRIBLE at around 21%.  Even though the R-squared is poor it's simple to run this model with the test data, so we'll do that next. 
+
+```{r}
+#Predict with the first model training data
+first_model_predictions = predict(first_model,test)
+```
+
+```{r}
+#Evaluate the first model results using RMSE
+rmse(test$TARGET_WINS, first_model_predictions)
+```
+
+### Second Model
+Using a manual review, below are the features selected for the second model and the supporting reason/s.
+
+We'll keep the features from the first model (due to low p-values) and add two more features...
+TEAM_FIELDING_E = Errors: errors are costly in terms of immediate impact, but could also impact the team in other ways (i.e. a high occurrence could impact team comraderie and confidence in each other)
+
+TEAM_PITCHING_BB = Walks allowed: putting players on base for "free" is more opportunity for points 
+
+<B> Create the Regression Model </B>  
+```{r}
+#Select the desired data for the model
+rmdata <- train %>%
+  select(TEAM_BATTING_H, TEAM_PITCHING_H, TEAM_FIELDING_E, TEAM_PITCHING_BB, TARGET_WINS)
+
+#Build the second model and produce a summary
+second_model <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_PITCHING_H + TEAM_FIELDING_E + TEAM_PITCHING_BB, data = rmdata)
+summary(second_model)
+```
+
+```{r}
+#Predict with the second model training data
+second_model_predictions = predict(second_model,test)
+```
+
+```{r}
+#Evaluate the second model results using RMSE
+rmse(test$TARGET_WINS, second_model_predictions)
+```
+The increase from two features in the first model to four features in the second model did not yield a noticeable improvement.  The Adjusted R2 on the training data improved slightly, but the RMSE for all practical purposes stayed the same at around 13; which is a poor RMSE implying that both models have poor predictive capability.
+
