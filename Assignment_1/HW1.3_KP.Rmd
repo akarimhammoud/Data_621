@@ -13,6 +13,8 @@ knitr::opts_chunk$set(warning = FALSE)
 library(dplyr)
 library(Metrics)
 library(MLmetrics)
+library(leaps)
+library(car)
 ```
 
 
@@ -26,7 +28,7 @@ cat('Data for this project is', cases, 'cases and', features, 'features')
 ```
 
 ```{r data}
-head(data,1)
+head(data,4)
 ```
 
 ### Create train and test data
@@ -109,4 +111,104 @@ second_model_predictions = predict(second_model,test)
 rmse(test$TARGET_WINS, second_model_predictions)
 ```
 The increase from two features in the first model to four features in the second model did not yield a noticeable improvement.  The Adjusted R2 on the training data improved slightly, but the RMSE for all practical purposes stayed the same at around 13; which is a poor RMSE implying that both models have poor predictive capability.
+
+
+```{r}
+
+colSums(is.na(data))
+
+data_clean <- na.omit(data) 
+
+colSums(is.na(data_clean))
+
+```
+
+
+
+```{r}
+
+data$id <- 1:nrow(data_clean)
+train_clean <- data_clean %>% dplyr::sample_frac(.75)
+test_clean  <- dplyr::anti_join(data_clean, train, by = 'INDEX')
+
+colSums(is.na(train_clean))
+
+```
+
+
+```{r}
+
+x_data <- train_clean %>%
+  select(TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B, TEAM_BATTING_HR, TEAM_BATTING_BB, TEAM_BATTING_SO, 
+         TEAM_BASERUN_SB, TEAM_BASERUN_CS, TEAM_PITCHING_H, TEAM_PITCHING_HR, TEAM_PITCHING_BB, TEAM_PITCHING_SO, 
+         TEAM_FIELDING_E, TEAM_FIELDING_DP)
+
+y_data <- train_clean$TARGET_WINS
+y_data
+leaps(x=as.matrix(x_data), y=y_data, int=TRUE, method=c("adjr2"), nbest=10)
+
+```
+
+
+## Backward Elimination
+
+```{r}
+
+# Backward Elimination
+matt_model <- lm(TARGET_WINS ~ TEAM_BASERUN_SB + TEAM_BATTING_HR
+                 + TEAM_BATTING_BB + TEAM_BASERUN_SB
+                 + TEAM_PITCHING_SO + TEAM_FIELDING_E + TEAM_FIELDING_DP
+                 , data = train_clean)
+summary(matt_model)
+
+```
+
+
+```{r}
+
+matt_model_predictions = predict(matt_model, test_clean)
+#Evaluate the second model results using RMSE
+rmse(test_clean$TARGET_WINS, matt_model_predictions)
+
+```
+
+
+```{r}
+vif(matt_model)
+```
+
+
+## Forward Selection
+
+```{r}
+
+# Forward Selection
+foward_model <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_BB + TEAM_FIELDING_E + TEAM_FIELDING_DP
+                   + TEAM_PITCHING_HR + TEAM_PITCHING_SO, data = train_clean)
+summary(foward_model)
+
+```
+
+
+```{r}
+
+forward_model_predictions = predict(foward_model, test_clean)
+#Evaluate the second model results using RMSE
+rmse(test_clean$TARGET_WINS, forward_model_predictions)
+vif(matt_model)
+```
+
+
+```{r}
+vif(foward_model)
+```
+
+## OLS Assumptions
+
+1) no multicollinearity
+2) independent errors
+3) equal variance
+???
+
+
 
