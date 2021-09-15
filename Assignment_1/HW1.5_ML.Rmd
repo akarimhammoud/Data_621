@@ -11,11 +11,6 @@ knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
 ```{r }
 library(dplyr)
@@ -28,52 +23,43 @@ library(car)
 ## Load Data
 
 ```{r echo=FALSE}
-# load data
 data <- read.csv('moneyball-training-data.csv')
 ```
 
 
-### Create train and test data
-
-```{r}
-data$id <- 1:nrow(data)
-train <- data %>% dplyr::sample_frac(.75)
-test  <- dplyr::anti_join(data, train, by = 'INDEX')
-```
-
-
+## Clean data
 
 ```{r}
 
+# Review NA counts
 colSums(is.na(data))
 
+# Remove NAs
 data_clean <- na.omit(data) 
 
+# Confirm NAs were removed
 colSums(is.na(data_clean))
 
 ```
 
+## Create Train, Test Split
 
 ```{r}
 
 train_clean <- data_clean %>% dplyr::sample_frac(.75)
-test_clean  <- dplyr::anti_join(data_clean, train, by = 'INDEX')
-
-colSums(is.na(train_clean))
+test_clean  <- dplyr::anti_join(data_clean, train_clean, by = 'INDEX')
 
 ```
 
 
-
-## Model 3: Backward Elimination
+## Model 3: Backward Elimination Model
 
 ```{r}
 
-# Backward Elimination
-backward_model <- lm(TARGET_WINS ~ TEAM_BASERUN_SB + TEAM_BATTING_HR
-                 + TEAM_BATTING_BB + TEAM_BASERUN_SB
-                 + TEAM_PITCHING_SO + TEAM_FIELDING_E + TEAM_FIELDING_DP
-                 , data = train_clean)
+# Fit model
+backward_model <- lm(TARGET_WINS ~ TEAM_BASERUN_SB + TEAM_BATTING_HR + TEAM_BATTING_BB + TEAM_BASERUN_SB 
+                     + TEAM_PITCHING_SO + TEAM_FIELDING_E + TEAM_FIELDING_DP, data = train_clean)
+# View summary
 summary(backward_model)
 
 ```
@@ -90,7 +76,7 @@ rmse(test_clean$TARGET_WINS, backward_model_predictions)
 ```
 
 
-## Model 4: Forward Selection
+## Model 4: Forward Selection Model
 
 ```{r}
 
@@ -114,7 +100,7 @@ rmse(test_clean$TARGET_WINS, forward_model_predictions)
 ```
 
 
-## Validating OLS Assumptions
+## Verifying OLS Regression Assumptions
 
 ```{r}
 # Assumption: No Multicollinearity (VIF under 5)
@@ -140,16 +126,25 @@ acf(residuals(foward_model), lags=20)
 
 ## Model Selection
 
-The two primary statistics used to choose our final model were adjusted r-squared and root mean square error (RMSE). 
+First, before fully evaluating models we validated that all individual predictors had p-values below 0.05, the cutoff for a 95% confidence level. Additionally, we validated that the models F-statistics were also significant at a 95% confidence level.
 
-Adjusted r-squared helped guide model selection since, like r-squared, adjusted r-squared measures the amount of variation in the dependent variable explained by the independent variables, except with a correction to ensure only independent variables with predictive power raise the statistic.
+Then, the two primary statistics used to choose our final model were adjusted R-squared and root mean square error (RMSE). Adjusted R-squared helped guide model selection since, like R-squared, adjusted R-squared measures the amount of variation in the dependent variable explained by the independent variables, except with a correction to ensure only independent variables with predictive power raise the statistic. RMSE was perhaps even more crucial to model selection as it is the measure of the standard deviation of the residuals, essentially a measure of accuracy in the same units as the response variable. To ensure the model can generalize to unobserved data, we calculated the RMSE on our test set. 
 
-RMSE was perhaps even more crucial to model selection as it is the measure of the standard deviation of the residuals.
+Both of our top models–forward selection and backward elimination–saw a RMSE of 8.5. Therefore, we chose the forward selection model due to its slightly higher adjusted R-squared–0.54 vs 0.53. Additionally, since both top performing models included six predictors, parsimony was not a consideration.
 
-However, before evaluating those statistics we first validated that all our individual predictors had p-values below 0.05, the cutoff for a 95% confidence interval. Additionally, we validated that the F-statistic was also significant at a 95% confidence interval.
+Lastly, we verified the forward selection model meets OLS regression assumptions. These included: no significant multicollinearity, the mean of residuals is zero, homoscedasticity of residuals, and no significant auto-correlation. We deemed all assumptions had been met, but note, there is a slight trend in the residuals vs fitted plot (Assumption: Homoscedasticity of residuals) which may indicate a small nonlinear trend.
 
 
 ## References
 
-Bhandari, Aniruddha, Analytics Vidhya, 2020 https://www.analyticsvidhya.com/blog/2020/07/difference-between-r-squared-and-adjusted-r-squared/ 
+Bhandari, Aniruddha, "Key Difference between R-squared and Adjusted R-squared for Regression Analysis", Analytics Vidhya, 2020 https://www.analyticsvidhya.com/blog/2020/07/difference-between-r-squared-and-adjusted-r-squared/ 
+
+Glen., Stephanie "RMSE: Root Mean Square Error", StatisticsHowTo.com https://www.statisticshowto.com/probability-and-statistics/regression-analysis/rmse-root-mean-square-error/
+
+Gupta, Aryansh, "Linear Regression Assumptions and Diagnostics in R", RPubs, https://rpubs.com/aryn999/LinearRegressionAssumptionsAndDiagnosticsInR 
+
+Kim, Bommae, "Understanding Diagnostic Plots for Linear Regression Analysis", University of Virginia Library, https://data.library.virginia.edu/diagnostic-plots/ 
+
+
+
 
