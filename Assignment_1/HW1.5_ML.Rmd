@@ -1,7 +1,7 @@
 ---
-title: "HW1.5_ML"
+title: "HW1 ML Take #2"
 author: "Matthew Lucich"
-date: "9/13/2021"
+date: "9/18/2021"
 output: html_document
 ---
 
@@ -18,38 +18,223 @@ library(Metrics)
 library(MLmetrics)
 library(leaps)
 library(car)
+library(MASS)
+
+library(tidyverse)
+library(caret)
+library(leaps)
 ```
 
-## Load Data
 
-```{r echo=FALSE}
-data <- read.csv('moneyball-training-data.csv')
+### Load the Data
+```{r}
+train_raw <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-training-data.csv")
+
+evaluation_raw <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-evaluation-data.csv")
 ```
 
 
-## Clean data
+
+# Variable Distributions
+
+```{r}
+train_raw %>%
+  gather(variable, value, TARGET_WINS:TEAM_FIELDING_DP) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "#3A8B63", color="#3A8B63") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+```
+
+# Log Variable Distributions
+
+```{r}
+
+train_log <- log(train_raw)
+
+train_log %>%
+  gather(variable, value, TARGET_WINS:TEAM_FIELDING_DP) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "#3A8B63", color="#3A8B63") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+
+```
+
+# Add log transformed variables to training set, for the variables that appear more normal when log transformed
+
+```{r}
+
+train_raw$TEAM_BASERUN_CS_log <- log(train_raw$TEAM_BASERUN_CS)
+train_raw$TEAM_BASERUN_SB_log <- log(train_raw$TEAM_BASERUN_SB)
+train_raw$TEAM_BATTING_3B_log <- log(train_raw$TEAM_BATTING_3B)
+train_raw$TEAM_BATTING_H_log <- log(train_raw$TEAM_BATTING_H)
+train_raw$TEAM_PITCHING_BB_log <- log(train_raw$TEAM_PITCHING_BB)
+
+```
+
+
+
+## Remove NAs
 
 ```{r}
 
 # Review NA counts
-colSums(is.na(data))
+colSums(is.na(train_raw))
 
 # Remove NAs
-data_clean <- na.omit(data) 
+train_no_na <- na.omit(train_raw) 
+evaluation_no_na <- na.omit(evaluation_raw) 
 
 # Confirm NAs were removed
-colSums(is.na(data_clean))
+colSums(is.na(train_no_na))
 
+colSums(is.na(evaluation_no_na))
 ```
+
 
 ## Create Train, Test Split
 
 ```{r}
 
-train_clean <- data_clean %>% dplyr::sample_frac(.75)
-test_clean  <- dplyr::anti_join(data_clean, train_clean, by = 'INDEX')
+train_all <- train_no_na %>% dplyr::sample_frac(.75)
+test  <- dplyr::anti_join(train_no_na, train_all, by = 'INDEX')
 
 ```
+
+
+## Exclude variables that do not meet normality assumption
+
+```{r}
+
+train <- train_all %>% dplyr::select(TARGET_WINS, TEAM_BATTING_2B, TEAM_BATTING_BB, 
+                                             TEAM_FIELDING_DP, TEAM_BASERUN_CS_log, TEAM_BASERUN_SB_log, 
+                                             TEAM_BATTING_3B_log, TEAM_BATTING_H_log, TEAM_PITCHING_BB_log)
+
+```
+
+
+## Automated AIC
+
+```{r}
+# Source: http://www.sthda.com/english/articles/37-model-selection-essentials-in-r/154-stepwise-regression-essentials-in-r/
+
+full.model <- lm(TARGET_WINS ~., data = train)
+# Stepwise regression model
+step.model <- stepAIC(full.model, direction = "both", 
+                      trace = FALSE)
+summary(step.model)
+
+```
+
+
+## Automated leapBackward
+
+```{r}
+
+# Set seed for reproducibility
+set.seed(212)
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+leapBackward <- train(TARGET_WINS ~., data = train,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 1:8),
+                    trControl = train.control
+                    )
+leapBackward$results
+
+```
+
+
+
+## Automated leapForward
+
+```{r}
+
+# Set seed for reproducibility
+set.seed(212)
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+leapForward.model <- train(TARGET_WINS ~., data = train,
+                    method = "leapForward", 
+                    tuneGrid = data.frame(nvmax = 1:8),
+                    trControl = train.control
+                    )
+leapForward.model$results
+
+```
+
+
+
+## Automated leapSeq
+
+```{r}
+
+# Set seed for reproducibility
+set.seed(212)
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+leapSeq.model <- train(TARGET_WINS ~., data = train,
+                    method = "leapSeq", 
+                    tuneGrid = data.frame(nvmax = 1:8),
+                    trControl = train.control
+                    )
+leapSeq.model$results
+
+```
+
+
+# Best model out of the automated: leapForward, leapBackward, leapSeq
+
+```{r}
+
+summary(leapForward.model$finalModel)
+
+```
+
+
+## Automated model Leap Forward
+
+```{r}
+
+# Fit model
+automated_forward_model <- lm(formula = TARGET_WINS ~ TEAM_BATTING_2B + TEAM_BATTING_BB + TEAM_FIELDING_DP 
+                              + TEAM_BASERUN_CS_log + TEAM_BASERUN_SB_log + TEAM_BATTING_3B_log 
+                              + TEAM_BATTING_H_log + TEAM_PITCHING_BB_log, data = train)
+# View summary
+summary(automated_forward_model)
+
+```
+
+
+## Automated model Step AIC
+
+```{r}
+
+# Fit model
+automated_aic_model <- lm(formula = TARGET_WINS ~ TEAM_BATTING_BB + TEAM_FIELDING_DP + TEAM_BATTING_H_log
+                      , data = train)
+# View summary
+summary(automated_aic_model)
+
+```
+
+
+```{r}
+
+# Make predictions on test set
+automated_model_predictions = predict(automated_aic_model, test)
+
+# Obtain RMSE between actuals and predicted
+rmse(test$TARGET_WINS, automated_model_predictions)
+
+```
+
+
+# ORIGINAL MODELS
 
 
 ## Model 3: Backward Elimination Model
@@ -58,7 +243,7 @@ test_clean  <- dplyr::anti_join(data_clean, train_clean, by = 'INDEX')
 
 # Fit model
 backward_model <- lm(TARGET_WINS ~ TEAM_BASERUN_SB + TEAM_BATTING_HR + TEAM_BATTING_BB + TEAM_BASERUN_SB 
-                     + TEAM_PITCHING_SO + TEAM_FIELDING_E + TEAM_FIELDING_DP, data = train_clean)
+                     + TEAM_PITCHING_SO + TEAM_FIELDING_E + TEAM_FIELDING_DP, data = train_all)
 # View summary
 summary(backward_model)
 
@@ -68,10 +253,10 @@ summary(backward_model)
 ```{r}
 
 # Make predictions on test set
-backward_model_predictions = predict(backward_model, test_clean)
+backward_model_predictions = predict(backward_model, test)
 
 # Obtain RMSE between actuals and predicted
-rmse(test_clean$TARGET_WINS, backward_model_predictions)
+rmse(test$TARGET_WINS, backward_model_predictions)
 
 ```
 
@@ -82,7 +267,7 @@ rmse(test_clean$TARGET_WINS, backward_model_predictions)
 
 # Fit model
 foward_model <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_BATTING_BB + TEAM_FIELDING_E + TEAM_FIELDING_DP
-                   + TEAM_PITCHING_HR + TEAM_PITCHING_SO, data = train_clean)
+                   + TEAM_PITCHING_HR + TEAM_PITCHING_SO, data = train_all)
 # View summary
 summary(foward_model)
 
@@ -92,10 +277,11 @@ summary(foward_model)
 ```{r}
 
 # Make predictions on test set
-forward_model_predictions = predict(foward_model, test_clean)
+forward_model_predictions = predict(foward_model, test)
 
 # Obtain RMSE between actuals and predicted
-rmse(test_clean$TARGET_WINS, forward_model_predictions)
+rmse(test$TARGET_WINS, forward_model_predictions)
+
 
 ```
 
