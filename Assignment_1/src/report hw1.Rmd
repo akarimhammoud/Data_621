@@ -1,0 +1,14 @@
+---
+title: "Assignment 1"
+author: "Creative Thinking Group 2"
+date: "9/12/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("bookdown")
+```
