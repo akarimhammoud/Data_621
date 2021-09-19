@@ -162,8 +162,8 @@ test <- test %>%
 ^[https://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/R/R-Manual/R-Manual5.html]
 ```{r}
 #creates CSV in your current working directory of R
-write.csv(train, 'hw1_train_data.csv')
-write.csv(test, 'hw1_test_data.csv')
+write.csv(train, here('data','hw1_train_data.csv'))
+write.csv(test, here('data','hw1_test_data.csv'))
 ```
 
 ^[https://stats.idre.ucla.edu/r/faq/how-do-i-perform-multiple-imputation-using-predictive-mean-matching-in-r/]
@@ -289,9 +289,67 @@ rmse(test$TARGET_WINS, second_model_predictions)
 ```
 The increase from two features in the first model to four features in the second model did not yield a noticeable improvement.  The Adjusted R2 on the training data improved slightly, but the RMSE for all practical purposes stayed the same at around 13; which is a poor RMSE implying that both models have poor predictive capability.
 
-### Third Model
+## Third Model
+### BSR Model (SaberMetrics)
+*Base runs (BsR) is a baseball statistic invented by sabermetrician David Smyth to estimate the number of runs a team "should have"*
+*scored given their component offensive statistics, as well as the number of runs a hitter or pitcher creates or allows.* 
+*It measures essentially the same thing as Bill James runs created, but as sabermetrician Tom M. Tango points out, base* 
+*runs models the reality of the run-scoring process "significantly better than any other run estimator".*
 
+*Cleaning Data*
+```{r}
+# load data
+data <- read.csv(here('data','hw1_train_data.csv'))
 
+#imput data by regression: 
+data_imp <- mice(data, method = "norm.predict", m = 1)
+
+#complete data 
+data_complete <- complete(data_imp)
+```
+
+The simplest, uses only the most common batting statistics[2]
+
+$A = H + BB - HR$
+$B = (1.4 * TB - .6 * H - 3 * HR + .1 * BB) * 1.02$
+$C = AB - H$
+$D = HR$
+
+$BsR = \frac{(A * B)}{(B + C)} + D$
+
+```{r}
+data3 <- data_complete %>% 
+  rowwise() %>%
+  mutate(TEAM_BATTING_AB = sum( TEAM_BATTING_H,TEAM_BATTING_BB,TEAM_BATTING_SO, na.rm=TRUE),
+         TEAM_BATTING_1B = TEAM_BATTING_H - (TEAM_BATTING_2B + TEAM_BATTING_3B + TEAM_BATTING_HR),
+         TEAM_BATTING_TB = TEAM_BATTING_1B + (2 * TEAM_BATTING_2B) + (3 * TEAM_BATTING_3B) + (4 * TEAM_BATTING_HR),
+         BSR_A = TEAM_BATTING_H + TEAM_BATTING_BB - TEAM_BATTING_HR,
+         BSR_B = (( 1.4 * TEAM_BATTING_TB) - ( 0.6 * TEAM_BATTING_H) - (3 * TEAM_BATTING_HR) + (0.1 * TEAM_BATTING_BB)) * 1.02,
+         BSR_C = TEAM_BATTING_AB - TEAM_BATTING_H,
+         BSR = ((BSR_A*BSR_B)/(BSR_B + BSR_C)) + TEAM_BATTING_HR
+         )
+
+data3 <- as.data.frame(data3)
+train3 <- data3 %>% dplyr::sample_frac(.75)
+test3  <- dplyr::anti_join(data3, train3, by = 'X')
+```
+
+<B> Create the Regression Model </B>  
+*BSR*
+```{r}
+rmdata3 <- train3 %>%
+  select(BSR, TEAM_PITCHING_SO, TEAM_FIELDING_E, TEAM_FIELDING_DP, TARGET_WINS)
+
+#Build the second model and produce a summary
+GModel3 <- lm(TARGET_WINS ~ BSR + TEAM_PITCHING_SO + TEAM_FIELDING_E + TEAM_FIELDING_DP, data = rmdata3)
+summary(GModel3)
+
+#Predict with the second model training data
+GModel3_predictions = predict(GModel3,test3)
+
+#Evaluate the second model results using RMSE
+rmse(test3$TARGET_WINS, GModel3_predictions)
+```
 
 
 ## SELECT MODELS
