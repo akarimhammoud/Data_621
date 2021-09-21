@@ -30,13 +30,16 @@ library(corrplot)
 library(pacman)
 library(here)
 library(RCurl)
-library(tidyverse)
 library(naniar)
 library(UpSetR)
 library(mice)
-library(dplyr)
 library(Metrics)
 library(MLmetrics)
+library(car)
+library(caret)
+library(leaps)
+library(MASS)
+library(olsrr)
 ```
 
 
@@ -48,22 +51,25 @@ There are also quite a few variables with missing values. and,Some variables are
 ### Load the Data
 
 ```{r, echo=FALSE, results='asis', cache=TRUE}
+# Set seed for reproducibility
+set.seed(621)
+
 train <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-training-data.csv")
 
-test <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-evaluation-data.csv")
+evaluation <-read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-evaluation-data.csv")
 ```
 
 Summary of the data
 ```{r}
 summary(train)
-summary(test)
+summary(evaluation)
 ```
 
 Glimpse of the data
 ```{r}
 glimpse(train)
 
-glimpse(test)
+glimpse(evaluation)
 ```
 
 
@@ -113,18 +119,7 @@ train %>%
 
 ### DATA PREPARATION
 
-
-```{r}
-#remove index column from both test and train data
-train <- train %>% 
-  select(2:17)
-test <- test %>% 
-  select(2:16)
-```
-
-
-```colSums```^[https://statisticsglobe.com/count-number-of-na-values-in-vector-and-column-in-r]
-
+^[https://statisticsglobe.com/count-number-of-na-values-in-vector-and-column-in-r]
 ```{r}
 #NA counts for the train data set
 colSums(is.na(train))
@@ -153,81 +148,30 @@ Since 92% of the data for the TEAM_BATTING_HBP is missing, the variable has been
 
 ```{r}
 #removes the TEAM_BATTING_HBP due to high # of NAs
-train <- train %>% 
-  select(-c(TEAM_BATTING_HBP))
-test <- test %>% 
-  select(-c(TEAM_BATTING_HBP))
+train_full <- train %>% dplyr::select(-c(TEAM_BATTING_HBP))
+evaluation <- evaluation %>% dplyr::select(-c(TEAM_BATTING_HBP))
 ```
 
 ^[https://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/R/R-Manual/R-Manual5.html]
 ```{r}
 #creates CSV in your current working directory of R
-write.csv(train, here('data','hw1_train_data.csv'))
-write.csv(test, here('data','hw1_test_data.csv'))
+write.csv(train_full, here('data','hw1_train_data.csv'))
+write.csv(evaluation, here('data','hw1_evaluation_data.csv'))
 ```
 
-^[https://stats.idre.ucla.edu/r/faq/how-do-i-perform-multiple-imputation-using-predictive-mean-matching-in-r/]
-```{r}
-#build_kmeans()
-
-imputed_train_data <- mice(train, m=1)
-
-imputed_test_data <- mice(test, m=1)
-```
 
 ```{r}
-#appends the imputed data to the original data
-imp_train <- complete(imputed_train_data, "long", inc = TRUE)
-
-imp_test <- complete(imputed_test_data, "long", inc = TRUE)
+# Create train, test split
+train <- train_full %>% dplyr::sample_frac(.75)
+test  <- dplyr::anti_join(train_full, train, by = 'INDEX')
 ```
-
-```{r}
-#Imputation Diagnostic Checks
-
-## labels observed data in blue and imputed data in red for y1
-col <- rep(c("blue", "red")[1 + as.numeric(is.na(imputed_train_data$data$TEAM_BATTING_H))], 6)
-## plots data for y1 by imputation
-stripplot(TEAM_BATTING_H ~ .imp, data = imp_train, jit = TRUE, col = col, xlab = "imputation Number")
-```
-
 
 
 ## BUILD MODELS
 
-```{r echo=FALSE}
-# load data
-data <- read.csv('https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_1/data/moneyball-training-data.csv')
 
-cases = dim(data)[1]
-features = dim(data)[2]
-cat('Data for this project is', cases, 'cases and', features, 'features')
-```
-
-```{r data}
-head(data,1)
-```
-
-### Create train and test data
-```{r}
-data$id <- 1:nrow(data)
-train <- data %>% dplyr::sample_frac(.75)
-test  <- dplyr::anti_join(data, train, by = 'INDEX')
-```
-
-```{r}
-cases = dim(train)[1]
-features = dim(train)[2]
-cat('Training data for this project is', cases, 'cases and', features, 'features')
-```
-
-```{r}
-cases = dim(test)[1]
-features = dim(test)[2]
-cat('Testing data for this project is', cases, 'cases and', features, 'features')
-```
-
-### First Model
+## Model #1
+### Two predictors: Base hits by batters and Hits allowed
 Using a manual review, below are the features selected for the first model and the supporting reason/s.
 
 TEAM_BATTING_H = Base hits by batters:  it's impossible to win in baseball without getting to the bases and hitting the ball is the primary means to accomplish this.
@@ -238,28 +182,28 @@ Only two features are selected for the first model - start small and build up se
 
 <B> Create the Regression Model </B>  
 ```{r}
-#Select the desired data for the model
-rmdata <- train %>%
-  select(TEAM_BATTING_H, TEAM_PITCHING_H, TARGET_WINS)
 
-#Build the first model and produce a summary
-first_model <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_PITCHING_H, data = rmdata)
+# Build the first model and produce a summary
+first_model <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_PITCHING_H, data = train)
 summary(first_model)
+
 ```
 
 The p values are 0, which per the criteria of "keep a feature if the p-value is <0.05" recommends that we keep both these features.  But, the adjusted R-squared is TERRIBLE at around 21%.  Even though the R-squared is poor it's simple to run this model with the test data, so we'll do that next. 
 
 ```{r}
-#Predict with the first model training data
-first_model_predictions = predict(first_model,test)
-```
 
-```{r}
+#Predict with the first model training data
+first_model_predictions = predict(first_model, test)
+
 #Evaluate the first model results using RMSE
 rmse(test$TARGET_WINS, first_model_predictions)
+
 ```
 
-### Second Model
+
+## Model #2
+### Four predictors: Base hits by batters, Hits allowed, Errors, and Walks allowed
 Using a manual review, below are the features selected for the second model and the supporting reason/s.
 
 We'll keep the features from the first model (due to low p-values) and add two more features...
@@ -269,13 +213,11 @@ TEAM_PITCHING_BB = Walks allowed: putting players on base for "free" is more opp
 
 <B> Create the Regression Model </B>  
 ```{r}
-#Select the desired data for the model
-rmdata <- train %>%
-  select(TEAM_BATTING_H, TEAM_PITCHING_H, TEAM_FIELDING_E, TEAM_PITCHING_BB, TARGET_WINS)
 
-#Build the second model and produce a summary
-second_model <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_PITCHING_H + TEAM_FIELDING_E + TEAM_PITCHING_BB, data = rmdata)
+# Build the second model and produce a summary
+second_model <- lm(TARGET_WINS ~ TEAM_BATTING_H + TEAM_PITCHING_H + TEAM_FIELDING_E + TEAM_PITCHING_BB, data = train)
 summary(second_model)
+
 ```
 
 ```{r}
@@ -289,8 +231,8 @@ rmse(test$TARGET_WINS, second_model_predictions)
 ```
 The increase from two features in the first model to four features in the second model did not yield a noticeable improvement.  The Adjusted R2 on the training data improved slightly, but the RMSE for all practical purposes stayed the same at around 13; which is a poor RMSE implying that both models have poor predictive capability.
 
-## Third Model
-### BSR Model (SaberMetrics)
+## Model #3
+### BSR Model (SaberMetrics) (data imputation)
 *Base runs (BsR) is a baseball statistic invented by sabermetrician David Smyth to estimate the number of runs a team "should have"*
 *scored given their component offensive statistics, as well as the number of runs a hitter or pitcher creates or allows.* 
 *It measures essentially the same thing as Bill James runs created, but as sabermetrician Tom M. Tango points out, base* 
@@ -338,19 +280,126 @@ test3  <- dplyr::anti_join(data3, train3, by = 'X')
 *BSR*
 ```{r}
 rmdata3 <- train3 %>%
-  select(BSR, TEAM_PITCHING_SO, TEAM_FIELDING_E, TEAM_FIELDING_DP, TARGET_WINS)
+  dplyr::select(BSR, TEAM_PITCHING_SO, TEAM_FIELDING_E, TEAM_FIELDING_DP, TARGET_WINS)
 
 #Build the second model and produce a summary
 GModel3 <- lm(TARGET_WINS ~ BSR + TEAM_PITCHING_SO + TEAM_FIELDING_E + TEAM_FIELDING_DP, data = rmdata3)
 summary(GModel3)
+
+```
+
+
+```{r}
 
 #Predict with the second model training data
 GModel3_predictions = predict(GModel3,test3)
 
 #Evaluate the second model results using RMSE
 rmse(test3$TARGET_WINS, GModel3_predictions)
+
+```
+
+
+## Model #4
+### (Modified) Backward Elimination Model (omitting NAs)
+
+Due to previously learning how to perform Backward Elimination and it being possible to perform manually, we decided to include a model that resulted from the procedure. The process was performed with imputed data (via MICE) as well as data with NAs removed. The latter showed stronger results, therefore the final model was fitted with the NA omitted data. 
+
+According to Faraway, Backward Elimination is when you start with all predictors in the model, then remove the predictor with the highest p-value as long as it is above your p-value threshold (e.g. 0.05). Then refit the model and continue the process until only predictors with p-values below your threshold remain.
+
+Additionally, we took steps to remove variables with non-intuitive coefficients. For instance, TEAM_FIELDING_DP and TEAM_PITCHING_SO were unexpectedly showing negative effects on wins. While there could be potential intervening variables giving these variables true predictive power, we opted to remove the variables from the model due to the possibility they were significant by chance and due to our bias towards parsimony. Further, RMSE did not drastically worsen when removed.
+
+
+```{r}
+# Remove NAs
+train_no_na <- na.omit(train) 
+test_no_na <- na.omit(test) 
+```
+
+
+```{r}
+
+# Fit model
+backward_model <- lm(TARGET_WINS ~ TEAM_BASERUN_SB + TEAM_BATTING_HR + TEAM_BATTING_BB + TEAM_BASERUN_SB 
+                     + TEAM_PITCHING_SO + TEAM_FIELDING_E + TEAM_FIELDING_DP, data = test_no_na)
+
+# Fit modified model
+backward_mod_model <- lm(TARGET_WINS ~ TEAM_BASERUN_SB + TEAM_BATTING_HR + TEAM_BATTING_BB + TEAM_FIELDING_E, 
+                     data = test_no_na)
+
+
+# View summary
+summary(backward_mod_model)
+
+```
+
+
+```{r}
+
+# Make predictions on test set
+backward_model_predictions = predict(backward_mod_model, test_no_na)
+
+# Obtain RMSE between actuals and predicted
+rmse(test_no_na$TARGET_WINS, backward_model_predictions)
+
+```
+
+
+```{r}
+
+# Make predictions on evaluation data
+backward_model_predictions_evaluation = predict(backward_mod_model, evaluation)
+
+# Final predictions on evaluation set
+write.csv(backward_model_predictions_evaluation, here('data','evaluation_predictions.csv'))
+
 ```
 
 
 ## SELECT MODELS
+
+
+## Verifying OLS Regression Assumptions
+
+```{r}
+# Assumption: No Multicollinearity (VIF under 5)
+vif(backward_mod_model)
+```
+
+```{r}
+# Assumption: Mean of residuals is zero
+mean(residuals(backward_mod_model))
+```
+
+```{r}
+# Assumption: Homoscedasticity of residuals
+plot(backward_mod_model)
+```
+
+```{r}
+# Assumption: No auto-correlation
+acf(residuals(backward_mod_model), lags=20)
+```
+
+
+## Model Selection
+
+First, before fully evaluating models we validated that all individual predictors had p-values below 0.05, the cutoff for a 95% confidence level. Additionally, we validated that the models F-statistics were also significant at a 95% confidence level.
+
+Then, the two primary statistics used to choose our final model were adjusted R-squared and root mean square error (RMSE). Adjusted R-squared helped guide model selection since, like R-squared, adjusted R-squared measures the amount of variation in the dependent variable explained by the independent variables, except with a correction to ensure only independent variables with predictive power raise the statistic. RMSE was perhaps even more crucial to model selection as it is the measure of the standard deviation of the residuals, essentially a measure of accuracy in the same units as the response variable. To ensure the model can generalize to unobserved data, we calculated the RMSE on our test set. 
+
+Backward elimination saw a RMSE of approximately 10, noticeably outperforming other models. Therefore, we chose the backward elimination model even with a slightly worse adjusted R-squared. Additionally, since all top performing models included four predictors, parsimony was not a consideration.
+
+Lastly, we verified the forward selection model meets OLS regression assumptions. These included: no significant multicollinearity, the mean of residuals is zero, homoscedasticity of residuals, and no significant auto-correlation. We deemed all assumptions had been met, but note, there is a slight trend in the residuals vs fitted plot (Assumption: Homoscedasticity of residuals) which may indicate a small nonlinear trend.
+
+
+## Matt's References
+
+Bhandari, Aniruddha, "Key Difference between R-squared and Adjusted R-squared for Regression Analysis", Analytics Vidhya, 2020 https://www.analyticsvidhya.com/blog/2020/07/difference-between-r-squared-and-adjusted-r-squared/ 
+
+Glen., Stephanie "RMSE: Root Mean Square Error", StatisticsHowTo.com https://www.statisticshowto.com/probability-and-statistics/regression-analysis/rmse-root-mean-square-error/
+
+Gupta, Aryansh, "Linear Regression Assumptions and Diagnostics in R", RPubs, https://rpubs.com/aryn999/LinearRegressionAssumptionsAndDiagnosticsInR 
+
+Kim, Bommae, "Understanding Diagnostic Plots for Linear Regression Analysis", University of Virginia Library, https://data.library.virginia.edu/diagnostic-plots/ 
 
