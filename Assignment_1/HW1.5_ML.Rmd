@@ -1,7 +1,7 @@
 ---
 title: "HW1 ML Take #2"
 author: "Matthew Lucich"
-date: "9/18/2021"
+date: "9/13/2021"
 output: html_document
 ---
 
@@ -282,7 +282,6 @@ forward_model_predictions = predict(foward_model, test)
 # Obtain RMSE between actuals and predicted
 rmse(test$TARGET_WINS, forward_model_predictions)
 
-
 ```
 
 
@@ -316,12 +315,14 @@ First, before fully evaluating models we validated that all individual predictor
 
 Then, the two primary statistics used to choose our final model were adjusted R-squared and root mean square error (RMSE). Adjusted R-squared helped guide model selection since, like R-squared, adjusted R-squared measures the amount of variation in the dependent variable explained by the independent variables, except with a correction to ensure only independent variables with predictive power raise the statistic. RMSE was perhaps even more crucial to model selection as it is the measure of the standard deviation of the residuals, essentially a measure of accuracy in the same units as the response variable. To ensure the model can generalize to unobserved data, we calculated the RMSE on our test set. 
 
-Both of our top models–forward selection and backward elimination–saw a RMSE of 8.5. Therefore, we chose the forward selection model due to its slightly higher adjusted R-squared–0.54 vs 0.53. Additionally, since both top performing models included six predictors, parsimony was not a consideration.
+Both of our top models–forward selection and backward elimination–saw a RMSE of approximately 9. Therefore, we chose the forward selection model due to its slightly higher adjusted R-squared. Additionally, since both top performing models included six predictors, parsimony was not a consideration.
 
 Lastly, we verified the forward selection model meets OLS regression assumptions. These included: no significant multicollinearity, the mean of residuals is zero, homoscedasticity of residuals, and no significant auto-correlation. We deemed all assumptions had been met, but note, there is a slight trend in the residuals vs fitted plot (Assumption: Homoscedasticity of residuals) which may indicate a small nonlinear trend.
 
 
-## References
+
+
+## Matt's References
 
 Bhandari, Aniruddha, "Key Difference between R-squared and Adjusted R-squared for Regression Analysis", Analytics Vidhya, 2020 https://www.analyticsvidhya.com/blog/2020/07/difference-between-r-squared-and-adjusted-r-squared/ 
 
