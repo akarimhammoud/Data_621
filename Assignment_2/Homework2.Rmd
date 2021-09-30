@@ -1,0 +1,170 @@
+---
+title: "DATA 621 Homework 2"
+author: "Group 2"
+---
+
+### Overview
+In this homework assignment, you will work through various classification metrics. You will be asked to create functions in R to carry out the various calculations. You will also investigate some functions in packages that will let you obtain the equivalent results. Finally, you will create graphical output that also can be used to evaluate the output of classification models, such as binary logistic regression.
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(dplyr)
+```
+
+### Question 1
+Download the classification output data set and load it
+```{r echo=FALSE}
+# load data
+data <- read.csv('classification-output-data.csv')
+head(data,2)
+```
+
+```{r}
+instances = dim(data)[1]
+features = dim(data)[2]
+cat('Dataset for this assignment is', instances, 'instances and', features, 'features')
+```
+
+Create a dataframe of the features needed for questions 1 - 8, and 11
+```{r}
+cdata = data %>% select(c(class, scored.class))
+head(cdata,2)
+```
+
+### Question 2
+#### table function
+Use the table() function to get the raw confusion matrix for the scored dataset.
+```{r}
+library(data.table)
+
+#create the table
+ctable = setDT(cdata)
+
+#create a matrix
+cmatrix = table(ctable$scored.class, ctable$class)
+cmatrix
+```
+
+#### Define variables for functions
+```{r}
+
+TN = cmatrix[1,1]
+TP = cmatrix[2,2]
+FP = cmatrix[2,1]
+FN = cmatrix[1,2]
+
+cat('True negative(TN):',TN, 'True positive(TP):',TP, 'False negative(FN):',FN, 'False positive(FP):',FP)
+```
+
+### Question 3
+Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.
+
+```{r}
+faccuracy <- function(TP, FP, TN, FN){
+  accuracy <- sum(TP,TN)/sum(TP,FP,TN,FN)
+  return(accuracy)
+}
+```
+
+### Question 4
+Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.
+
+```{r}
+fclass_error_rate <- function(TP, FP, TN, FN){
+  class_error_rate <- sum(FP,FN)/sum(TP,FP,TN,FN)
+  return(class_error_rate)
+}
+```
+
+### Question 5
+Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.
+
+```{r}
+fprecision <- function(TP, FP){
+  precision <- TP/(TP+FP)
+  return(precision)
+}
+```
+
+### Question 6
+Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.
+
+```{r}
+fsensitivity <- function(TP,FN){
+  sensitivity <- TP/(TP+FN)
+  return(sensitivity)
+}
+```
+
+### Question 7
+Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.
+
+```{r}
+fspecificity <- function(FP,TN){
+  specificity <- TN/(TN+FP)
+  return(specificity)
+}
+```
+
+### Question 8
+Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.
+
+```{r}
+fF1_score <- function(precision, sensitivity){
+  F1_score <- (2 * precision * sensitivity)/(precision + sensitivity)
+  return(F1_score)
+}
+
+```
+
+### Question 11
+Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.
+
+```{r}
+accuracy = faccuracy(TP, FP, TN, FN)
+cat('accuracy:',accuracy,'\n')
+
+class_error_rate = fclass_error_rate(TP, FP, TN, FN)
+cat('classification error rate:',class_error_rate,'\n')
+
+precision = fprecision(TP, FP)
+cat('precision:',precision,'\n')
+  
+sensitivity = fsensitivity(TP,FN)
+cat('sensitivity:',sensitivity,'\n')
+  
+specificity = fspecificity(FP,TN)
+cat('specificity:',specificity,'\n')
+  
+F1_score = fF1_score(precision, sensitivity)
+cat('F1 score:',F1_score)
+  
+```
+
+### Question 12
+Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?
+
+The caret package confusion matrix builds the matrix as follows
+TN   FN
+FP   TP
+
+When I first ran the Caret package's Confusion Matrix the sensitivity and specificity values were the opposite of what my custom functions produced. [This link from Stack Overflow](https://stackoverflow.com/questions/62794736/caret-confusionmatrix-measures-are-wrong) helped me solve the problem.  I needed to set the parameter "positive" to a value of 1 because Caret defaults to positive being a value of 0.
+```{r}
+library(caret)
+
+#Creates vectors having data points
+expected_value <- factor(c(cdata %>% pull(class)))
+predicted_value <- factor(c(cdata %>% pull(scored.class)))
+ 
+#Creating confusion matrix
+caret_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expected_value, positive='1')
+ 
+#Display results 
+caret_confusion_matrix
+```
+
