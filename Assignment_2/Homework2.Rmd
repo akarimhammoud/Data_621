@@ -17,7 +17,8 @@ library(dplyr)
 ```
 
 ### Question 1
-Download the classification output data set and load it
+**Download the classification output data set and load it**
+
 ```{r echo=FALSE}
 # load data
 data <- read.csv('classification-output-data.csv')
@@ -38,14 +39,15 @@ head(cdata,2)
 
 ### Question 2
 #### table function
-Use the table() function to get the raw confusion matrix for the scored dataset.
+**Use the table() function to get the raw confusion matrix for the scored dataset.**
+
 ```{r}
 library(data.table)
 
-#create the table
+# Create the table
 ctable = setDT(cdata)
-
-#create a matrix
+ctable
+# Create a matrix
 cmatrix = table(ctable$scored.class, ctable$class)
 cmatrix
 ```
@@ -62,7 +64,7 @@ cat('True negative(TN):',TN, 'True positive(TP):',TP, 'False negative(FN):',FN, 
 ```
 
 ### Question 3
-Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.
+**Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.**
 
 ```{r}
 faccuracy <- function(TP, FP, TN, FN){
@@ -72,7 +74,7 @@ faccuracy <- function(TP, FP, TN, FN){
 ```
 
 ### Question 4
-Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.
+**Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.**
 
 ```{r}
 fclass_error_rate <- function(TP, FP, TN, FN){
@@ -82,7 +84,7 @@ fclass_error_rate <- function(TP, FP, TN, FN){
 ```
 
 ### Question 5
-Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.
+**Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.**
 
 ```{r}
 fprecision <- function(TP, FP){
@@ -92,7 +94,7 @@ fprecision <- function(TP, FP){
 ```
 
 ### Question 6
-Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.
+**Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.**
 
 ```{r}
 fsensitivity <- function(TP,FN){
@@ -102,7 +104,7 @@ fsensitivity <- function(TP,FN){
 ```
 
 ### Question 7
-Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.
+**Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.**
 
 ```{r}
 fspecificity <- function(FP,TN){
@@ -112,7 +114,7 @@ fspecificity <- function(FP,TN){
 ```
 
 ### Question 8
-Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.
+**Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.**
 
 ```{r}
 fF1_score <- function(precision, sensitivity){
@@ -122,8 +124,135 @@ fF1_score <- function(precision, sensitivity){
 
 ```
 
+### Question 9
+**What are the bounds on the F1 score? Show that the F1 score will always be between 0 and 1. (Hint: If 0 < 𝑎 < 1 and 0 < 𝑏 < 1 then 𝑎𝑏 < 𝑎.)**
+
+According to David M W Powers in *Evaluation: From Precision, Recall and F-Factor
+to ROC, Informedness, Markedness & Correlation*, “Sensitivity is the proportion of Real Positive cases that are correctly Predicted Positive”. Additionally, he states: “Precision denotes the proportion of Predicted Positive cases that are correctly Real Positives.” Considering that proportions inherently range from zero to one we can consider those to be the bounds of Sensitivity and Precision.
+
+In order to calculate F1 score we insert Sensitivity and Precision in the following formula:
+
+$\frac{2 * Precision * Sensitivity}{Precision + Sensitivity}$
+
+Given that if 0 < 𝑎 < 1 and 0 < 𝑏 < 1 then 𝑎𝑏 < 𝑎, we know that the numerator (before multiplying by two) in the above formula cannot exceed the denominator. To prove that the numerator cannot exceed the denominator even after multiplying by two we will conduct two operations.
+
+First, since we know Sensitivity and Precision can range from zero to one, we create a sequence of possible values for each at intervals of 0.01. Then, for each combination of Sensitivity and Precision (limited to 0.01 intervals) we compute the denominator and numerator and take the difference. If the difference is never a negative value we know the numerator never exceeds the denominator and therefore cannot exceed a value of one. Since we know Sensitivity and Precision cannot be below zero we also know the denominator, which sums these two metrics, can never be subzero.
+
+Second, we again simulate each combination of potential Sensitivity and Precision values from zero to one at 0.01 increments. This time we compute the F1 score associated with each combination to demonstrate that all values of the simulation are bounded by zero and one.
+
+```{r}
+# Simulate Precision and Sensitivity: vectors of values between 0 and 1 at 0.01 interval
+precision_sweep <- seq(from = 0, to = 1, by = 0.01)
+sensitivity_sweep <- seq(from = 0, to = 1, by = 0.01)
+
+f1_bounds_method_1 <- function(precision_sweep, sensitivity_sweep) {
+  # Initialize dataframe (first row to be removed later)
+  df_f1 <- tibble("numerator" = 0, "denominator" = 0, "diff" = 0)
+  # Loop through each value of Precision (0 to 1 at 0.01 intervals)
+  for (prec in precision_sweep) {
+    # Loop through each value of Sensitivity (0 to 1 at 0.01 intervals)
+    for (sens in sensitivity_sweep) {
+     # Calculate numerator and denominator
+     f1_numerator <- (2 * prec * sens)
+     f1_denominator <- (prec + sens)
+     # Subtract numerator from denominator
+     diff_denom_numer <-  f1_denominator - f1_numerator
+     # Append row to dataframe with calculated values
+     df_f1 <- df_f1 %>% add_row("numerator" = f1_numerator, "denominator" = f1_denominator, 
+                                "diff" = diff_denom_numer)
+    }
+  }
+  # Remove first row which was only created to initialize the dataframe
+  df_f1[-1,]
+  
+  return (plot(df_f1$diff, xlab = "Simulation #", ylab = "Difference: Denominator - Numerator"))
+}
+
+f1_bounds_method_1(precision_sweep, sensitivity_sweep)
+
+f1_bounds_method_2 <- function(precision_sweep, sensitivity_sweep) {
+  # Initialize empty vector
+  f1_scores <- c()
+  # Loop through each value of Precision (0 to 1 at 0.01 intervals)
+  for (prec in precision_sweep) {
+    # Loop through each value of Sensitivity (0 to 1 at 0.01 intervals)
+    for (sens in sensitivity_sweep) {
+     # Append F1 score to F1 scores vector
+     f1_scores <- c(f1_scores, fF1_score(prec, sens))
+    }
+  }
+  return (plot(f1_scores, xlab = "Simulation #", ylab = "F1 Score"))
+}
+
+f1_bounds_method_2(precision_sweep, sensitivity_sweep)
+
+```
+
+
+### Question 10
+**Write a function that generates an ROC curve from a data set with a true classification column (class in our example) and a probability column (scored.probability in our example). Your function should return a list that includes the plot of the ROC curve and a vector that contains the calculated area under the curve (AUC). **
+
+First, to generate the ROC curve we create a sequence of thresholds ranging from 0 to 1 at 0.01 intervals, as specified in the directions. We then loop through each threshold and store the associated Sensitivity and 1 - Specificity values in a dataframe. The resulting values are then plotted with 1 - Specificity on the x axis and Sensitivity on the y axis–generating our ROC curve plot. Next, we approximate the AUC, through a method demonstrated by [Bob Horton for Revolutions](https://blog.revolutionanalytics.com/2016/11/calculating-auc.html), which samples from the positive labeled observations and negative labeled observations and calculates the summed probability of positive cases outranking negative cases.  
+
+```{r}
+generate_roc <- function(data) {
+  # Initialize dataframe (first row to be removed later)
+  df_sen_spec <- tibble("sensitivity" = 0, "specificity" = 0)
+  # Loop through thresholds
+  for (thres in seq(from = 0, to = 1, by = 0.01)) {
+      # If scored probability is above threshold, assign a value of 1
+      data$new_threshold <- ifelse(data$scored.probability > thres, 1, 0)
+      # Create confusion matrix for threshold
+      thres_method = table(factor(data$new_threshold, levels = 0:1), 
+                          factor(data$class, levels = 0:1), 
+                          dnn = c("Prediction", "Reference"))
+      # Extract true negatives, true positives, false positive, and false negatives
+      TN <- thres_method[1,1]
+      TP <- thres_method[2,2]
+      FP <- thres_method[2,1]
+      FN <- thres_method[1,2]
+      # Calculate Sensitivity and Specificity via our previously created functions
+      thres_sensitivity = fsensitivity(TP, FN)
+      thres_specificity = fspecificity(FP, TN)
+      # Append row to dataframe to store this threshold's associated Sensitivity and Specificity
+      df_sen_spec <- df_sen_spec %>% add_row("sensitivity" = thres_sensitivity, 
+                                             "specificity" = 1 - thres_specificity)
+  }
+  # Remove first row which was only created to initialize the dataframe
+  df_sen_spec[-1,]
+  # Generate ROC curve plot
+  roc_plot <- plot(df_sen_spec$specificity, df_sen_spec$sensitivity, 
+                   type="l", asp = 1, xlab = "1 - Specificity", ylab = "Sensitivity")
+  return (roc_plot)
+}
+
+calculate_auc_prob <- function(true_class, scored_probability, num_samples) {
+  # Sample from positive observations
+  pos <- sample(scored_probability[true_class], num_samples, replace=TRUE)
+  # Sample from negative observations
+  neg <- sample(scored_probability[!true_class], num_samples, replace=TRUE)
+  # Approximate AUC by summing probability of positive cases outranking negative cases
+  auc <- (sum(pos > neg) + sum(pos == neg)/2) / num_samples
+  return (c(auc))
+}
+
+roc_auc <- function(data) {
+  # Generate and store ROC curve plot
+  roc_plot <- generate_roc(data)
+  # Calculate and store AUC
+  auc_cal <- calculate_auc_prob(as.logical(data$class), data$scored.probability, 10000000)
+  roc_auc_list <- list(roc_plot, auc_cal)
+  return (roc_auc_list)
+}
+  
+roc_auc(data)
+
+```
+
+
+
 ### Question 11
-Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.
+**Use your created R functions and the provided classification output data set to produce all of the classification metrics discussed above.**
 
 ```{r}
 accuracy = faccuracy(TP, FP, TN, FN)
@@ -147,7 +276,7 @@ cat('F1 score:',F1_score)
 ```
 
 ### Question 12
-Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?
+**Investigate the caret package. In particular, consider the functions confusionMatrix, sensitivity, and specificity. Apply the functions to the data set. How do the results compare with your own functions?**
 
 The caret package confusion matrix builds the matrix as follows
 TN   FN
@@ -157,7 +286,7 @@ When I first ran the Caret package's Confusion Matrix the sensitivity and specif
 ```{r}
 library(caret)
 
-#Creates vectors having data points
+# Creates vectors having data points
 expected_value <- factor(c(cdata %>% pull(class)))
 predicted_value <- factor(c(cdata %>% pull(scored.class)))
  
@@ -166,5 +295,24 @@ caret_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expe
  
 #Display results 
 caret_confusion_matrix
+  
+
 ```
+
+
+### Question 13
+
+**Investigate the pROC package. Use it to generate an ROC curve for the data set. How do the results compare with your own functions?**
+
+The ROC curve plot resulting from the pROC package is close to identical to the plot generated from our own functions with the only difference being light smoothing found in the latter. The AUC results from the pROC package are within 0.01-0.03 of the approximation from our function.
+
+```{r}
+library(pROC)
+
+# Generate ROC curve plot and AUC
+roc(data$class, data$scored.probability,
+    percent=TRUE, plot=TRUE, ci=TRUE)
+
+```
+
 
