@@ -1,22 +1,47 @@
 ---
 title: "DATA 621 Assignment 3"
-author: "Maliat I"
-date: "10/2/2021"
+author: "Critical Thinking Group 2: George Cruz Deschamps, Karim Hammoud, Maliat Islam, Matthew Lucich, Gabriella Maritnez, Ken Popkin"
+date: "Date: `r Sys.Date()` | Due: 2021-11-07" 
 output:
-   prettydoc::html_pretty:
-    theme: cayman
+      html_document:
+        toc: yes
+        toc_float: yes
+        theme: yeti
+        highlight: kate
+        font-family: "Arial"
+        code_folding: "hide"
 ---
+# Binary Logistic Regression {.tabset}
+## Overview 
+In this homework assignment, you will explore, analyze and model a data set containing information on crime
+for various neighborhoods of a major city. Each record has a response variable indicating whether or not the crime
+rate is above the median crime rate (1) or not (0).  
+  
+Your objective is to build three different binary logistic regression models on the training data set to predict whether 
+or not neighborhoods are at risk for high crime. You will provide classifications and probabilities for the
+evaluation data set using your binary logistic regression model. You can only use the variables given to you (or
+variables that you derive from the variables provided). Below is a short description of the variables of interest in
+the data set:  
+  
+* `zn`       proportion of residential land zoned for lots over 25,000 sq.ft.
+* `indus`    proportion of non-retail business acres per town
+* `chas`     Charles River dummy variable (= 1 if tract bounds river; 0 otherwise)
+* `nox`      nitrogen oxides concentration (parts per 10 million)
+* `rm`       average number of rooms per dwelling
+* `age`      proportion of owner-occupied units built prior to 1940
+* `dis`      weighted distances to five Boston employment centers
+* `rad`      index of accessibility to radial highways
+* `tax`      full-value property-tax rate per $10,000
+* `ptratio`  pupil-teacher ratio by town
+* `lstat`    % lower status of the population
+* `medv`     median value of owner-occupied homes in $1000's
+* `target`   indicating whether or not the crime rate is above the median crime rate (1) or not (0) **response variable** 
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+## Package Dependencies
 
-## R Markdown
-### In this homework assignment, we will explore, analyze and model a data set containing information on crime for various neighborhoods of a major city. Each record has a response variable indicating whether or not the crime rate is above the median crime rate (1) or not (0).
-### We are going to build a binary logistic regression model on the training data set to predict whether the neighborhood will be at risk for high crime levels. we will also provide classifications and probabilities for the evaluation data set using binary logistic regression model
-
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
+library(Hmisc)
 library(psych)
 library(corrplot)
 library(RColorBrewer)
@@ -27,51 +52,52 @@ library(kableExtra)
 library(ResourceSelection)
 library(pROC)
 library(Amelia)
+library(summarytools)
 ```
-### Variables used in our dataset:
-```{r}
-vdict <- c("zn", "indus", "chas", "nox", "rm", "age", "dis", "rad", "tax", "ptratio", "lstat", "medv", "target")
-dscrptn <- c("proportion of residential land zoned for large lots (over 25000 square feet)", "proportion of non-retail business acres per suburb", "a dummy var. for whether the suburb borders the Charles River (1) or not (0)", "nitrogen oxides concentration (parts per 10 million)", "average number of rooms per dwelling", "proportion of owner-occupied units built prior to 1940", "weighted mean of distances to five Boston employment centers", "index of accessibility to radial highways", "full-value property-tax rate per $10,000", "pupil-teacher ratio by town","lower status of the population (percent)", "median value of owner-occupied homes in $1000s", "whether the crime rate is above the median crime rate (1) or not (0)")
-kable(cbind(vdict, dscrptn), col.names = c("Variable Name", "Short Description")) %>% 
-  kable_styling(full_width = T)
-```
+
+# Data Exploration {.tabset}
 ```{r}
 #load data
 crime_train <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_3/data/crime-training-data_modified.csv")
 crime_test <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_3/data/crime-evaluation-data_modified.csv")
 ```
-### Data Exploration:
 
-### Our dataset consists of 13 variables and 466 observations.Also, chas, is a dummy variable and the rest are numerical variables. Additionally, describe function from psych package will project the mean, standard deviation, skewness and other statistical analysis.
-## Missing Values
-## There is no missing values in this dataset.
+Using dplyr's ```glimpse()```^[https://www.rdocumentation.org/packages/dplyr/versions/0.3/topics/glimpse] function, we can take a 'glimpse" into the data and easily see the dimensions, variable names and types.
+
+```{r}
+glimpse(crime_train)
+ 
+```
+
+```{r}
+descr(crime_train,
+  headings = FALSE, #remove headings
+  stats = "common",# most common descriptive statistics, default is all
+  transpose = TRUE #allows for better display due to large amount of variables
+  ) %>% 
+  kbl(caption = "Univariate Descriptive Statistics - Training Data Set") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
 ```{r}
 missmap(crime_train, main = "Missing vs Observed Values")
 ```
 
-```{r}
-# summary statistics
-crime_train %>% 
-  mutate(chas = as.factor(chas), 
-         target = as.factor(target)) %>% 
-  glimpse() %>% 
-  describe()
-```
-### In the histogram plot below, we see that medv, and rm are normally distributed. We also see bi-modal distribution of the variables indus, rad and tax. The rest of the variables show moderate to high skewness on either side respectively.
+In the histogram plot below, we see that `medv`, and `rm` are normally distributed. We also see bi-modal distribution of the variables `indus`, `rad` and `tax`. The rest of the variables show moderate to high skewness on either side respectively.
 ```{r}
 # distribution of the varaibles
 crime_train %>%
   gather(key, value, -c(target, chas)) %>%
   ggplot(aes(value)) +
-  geom_histogram(binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3)), fill="#2c00e6") +
+  geom_histogram(binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3)), fill="steelblue") +
   facet_wrap(~ key, scales = 'free', ncol = 3) +
   theme_minimal()
 ```
 
-### In the box-plot figure below, we see many variables exhibit outliers We also see very high interquartile range for rad and tax variables where crime rate is above the median. Lastly, the variance between the 2 values of target differs for zn, nox, age, dis, rad & tax, which indicates that we will want to consider adding quadratic terms for them.
+In the box-plot figure below, we see many variables exhibit outliers We also see very high interquartile range for rad and tax variables where crime rate is above the median. Lastly, the variance between the 2 values of target differs for `zn`, `nox`, `age`, `dis`, `rad` & `tax`, which indicates that we will want to consider adding quadratic terms for them.
 
 ```{r}
-
 crime_train %>%
   dplyr::select(-chas) %>% 
   gather(key, value, -target) %>% 
@@ -80,26 +106,26 @@ crime_train %>%
   ggplot(aes(x = key, y = value)) +
   geom_boxplot(aes(fill = target)) +
   facet_wrap(~ key, scales = 'free', ncol = 3) +
-  scale_fill_manual(values=c("#00e69f", "#9f00e6")) +
+  scale_fill_manual(values=c("steelblue", "firebrick")) +
   theme_minimal()
 ```
 
-### In the correlation table and plot below, we see moderate positive correlation between variables nox, age, rad, tax, indus and target variables; and moderate negative correlation between variable dis. And the rest of the variables have weak or no correlations.
+In the correlation table and plot below, we see moderate positive correlation between variables nox, age, rad, tax, indus and target variables; and moderate negative correlation between variable dis. And the rest of the variables have weak or no correlations.
 ```{r}
 kable(sort(cor(dplyr::select(crime_train, target, everything()))[,1], decreasing = T), col.names = c("Correlation")) %>% 
   kable_styling(full_width = F)
-
-# correlation plot
-corrplot.mixed(cor(dplyr::select(crime_train, -chas)), 
-               number.cex = .9, 
-               upper = "number", 
-               lower = "shade", 
-               lower.col = brewer.pal(n = 12, name = "Paired"),
-               upper.col = brewer.pal(n = 12, name = "Paired"))
 ```
 
-### Data Preparation
-###  Some of the variables are skewed, have outliers or follow a bi-modal distribution. Therefore, we will perform transformation on some of these variables. First, we will remove the variable tax because of multicollinearity and it’s high VIF score. Next, we will take log transformation of age and lstat variables to lower skewness. Lastly, we will add quadratic term to zn, rad, and nox variables to account for its variances with respect to target variable.
+
+```{r fig.height = 7, fig.width = 7, warning=FALSE}
+numeric_values <- crime_train %>% select_if(is.numeric)
+train_cor <- cor(numeric_values)
+corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", lower="circle")
+```
+
+# Data Preparation {.tabset}
+
+Some of the variables are skewed, have outliers or follow a bi-modal distribution. Therefore, we will perform transformation on some of these variables. First, we will remove the variable `tax` due to multicollinearity and it’s high VIF score. Next, we will take log() transformation of `age` and `lstat` variables to lower skewness. Lastly, we will add quadratic term to `zn`, `rad`, and `nox` variables to account for its variances with respect to target variable.
 
 ```{r}
 # find multicollinear variables
@@ -108,7 +134,7 @@ kable((car::vif(glm(target ~. , data = crime_train))), col.names = c("VIF Score"
 ```
 
 ```{r}
-# transoformation of the variables. 
+# transformation of the variables. 
 crime_train_trans <- crime_train %>%
   dplyr::select(-tax) %>% 
   mutate(age = log(age),
@@ -118,13 +144,18 @@ crime_train_trans <- crime_train %>%
          nox = I(nox^2))
 ```
 
-
 ```{r}
-# distribution of the transformed variables
+# histogram distribution of the transformed variables
 crime_train_trans%>%
   gather(key, value, -c(target, chas)) %>%
   ggplot(aes(value)) +
-  geom_histogram(binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3)), fill="#2c00e6") +
+  geom_histogram(binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3)), fill="steelblue") +
   facet_wrap(~ key, scales = 'free', ncol = 3) +
   theme_minimal()
 ```
+
+
+# Build Models {.tabset}
+
+# Select Models {.tabset}
+
