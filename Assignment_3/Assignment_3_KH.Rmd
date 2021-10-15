@@ -1,0 +1,182 @@
+---
+title: "Data_621_Assignment_3"
+author: "Karim Hammoud"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(DT)
+library(psych)
+library(ROCR)
+library(glmnet)
+```
+# Data Exploration
+```{r}
+train <- read.csv('https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_3/data/crime-training-data_modified.csv')
+
+evaluation <- read.csv('https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_3/data/crime-evaluation-data_modified.csv')
+```
+
+Quick look at the train data
+```{r}
+datatable(train, options = list(
+  pageLength=5, scrollX='1px'), filter = 'top')
+```
+
+Summary of the train 
+```{r}
+summary(train)
+```
+
+Stats
+```{r}
+describe(train)
+```
+
+Count of NA
+```{r}
+map(train, ~sum(is.na(.))) %>% t()
+```
+There is no NAs in the data.
+
+Box plot of the variables
+```{r}
+ggplot(stack(train), aes(x = ind, y = values)) + 
+  geom_boxplot()
+```
+Scalling the variables
+```{r}
+train %>% 
+  scale() %>% 
+  as_tibble() %>% 
+  gather() %>% 
+  ggplot(aes(x = key, y = value)) +
+  # geom_violin()+
+  # geom_tufteboxplot(outlier.colour="black", outlier.shape = 22)+
+  geom_boxplot()+
+  theme(axis.title=element_blank()) +
+  ylab('Values Scaled')+
+  xlab('Variables')+
+  ggtitle( 'Values scaled for fitting')
+
+```
+
+We will check if the data is skewed right or left
+```{r}
+train %>% 
+  gather(variable, value, zn:target) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "#3A8B63", color="#3A8B63") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+```
+log
+```{r}
+train_log <- log(train)
+
+train_log %>% 
+  gather(variable, value, zn:target) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "#3A8B63", color="#3A8B63") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+```
+
+
+correlations
+```{r}
+x <- na.omit(train)
+cor(x)
+```
+
+
+
+
+```{r}
+corrDF <- cor(x = train[, 1:12], y = train$target) %>% 
+  as_tibble() %>% 
+  rename(Correlation = V1) %>% 
+  mutate(VarNames = names(train[, 1:12]))
+
+ggplot(corrDF, aes(x= reorder(VarNames, -abs(Correlation)), y=Correlation)) +
+  ggtitle('Correlation with Target') +
+  geom_bar(width=0.25, fill="skyblue", stat = "identity") +
+  theme(axis.title=element_blank())
+```
+From the plot above we can see that teh chas has hte lowest correlations, while nox, age, rad, dis, tax have way higher correlations.
+
+# Data Preperation
+
+I will set up the data to focuse on the correlation that are larger than 50%
+
+```{r}
+corr1 <- corrDF[which(abs(corrDF$Correlation) > 0.50),]
+corr1
+```
+# BUILD MODELS
+
+## First Model
+
+Here is a **Binary Logistic Regression** Null model for all variables before transformation
+
+```{r}
+Model1 <- glm(target ~ 1, 
+              data = train, 
+              family = binomial(link ="logit"))
+
+summary(Model1)
+```
+
+## Second Model
+
+The second model **Binary Logistic Regression** si full model for all the variables and data, before transformation
+
+```{r}
+
+Model2 <- glm(target ~ ., 
+              data = train, 
+              family = binomial(link ="logit"))
+
+summary(Model2)
+
+```
+
+
+
+## Thrid Model
+
+LASSO Regression lets check to see if it can give us a better coefficient value.
+
+```{r eval=FALSE, include=FALSE}
+X <- train_log %>% dplyr::select(-target)
+X <- data.matrix(X)
+#X <- as.matrix(X, ncol=12)
+y <- as.factor(train_log$target)
+
+aucDF <- X
+lasso.model = cv.glmnet(X, y, family = "binomial", type.measure = 'class')
+
+aucDF$lasso.prob <- predict(lasso.model, type="response", newx = X, s = 'lambda.1se')
+pred <- prediction(aucDF$lasso.prob, y)
+
+
+cvfit = cv.glmnet(X, y, family = "binomial", type.measure = "class")
+plot(cvfit)
+coef(cvfit, s = "lambda.1se")
+```
+
+
+```{r}
+model1 <- glm(target ~ . -tax -rm -chas - age -indus, 
+              family = binomial(link = "logit"), 
+              train)
+summary(model1)
+evaluation$model1 <- ifelse(predict.glm(model1, test,"response") < 0.5, 0, 1)
+cm <- confusionMatrix(factor(test$model1), factor(test$target),"1")
+results <- rbind(results,tibble(model = "model1",
+                                predictors = 6,F1 = cm$byClass[7],
+                                deviance=model1$deviance, 
+                                r2 = 1-model1$deviance/model1$null.deviance,
+                                aic=model1$aic))
+cm
+```
