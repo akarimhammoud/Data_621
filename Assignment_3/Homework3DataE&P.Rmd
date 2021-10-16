@@ -9,7 +9,7 @@ output:
         theme: yeti
         highlight: kate
         font-family: "Arial"
-        code_folding: "hide"
+        code_folding: "show"
 ---
 # Binary Logistic Regression {.tabset}
 ## Overview 
@@ -39,7 +39,7 @@ the data set:
 
 ## Package Dependencies
 
-```{r message=FALSE, warning=FALSE}
+```{r echo=TRUE, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(Hmisc)
 library(psych)
@@ -53,6 +53,9 @@ library(ResourceSelection)
 library(pROC)
 library(Amelia)
 library(summarytools)
+library(DataExplorer)
+
+library(dplyr)
 ```
 
 # Data Exploration {.tabset}
@@ -62,17 +65,31 @@ crime_train <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_62
 crime_test <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_3/data/crime-evaluation-data_modified.csv")
 ```
 
-Using dplyr's ```glimpse()```^[https://www.rdocumentation.org/packages/dplyr/versions/0.3/topics/glimpse] function, we can take a 'glimpse" into the data and easily see the dimensions, variable names and types.
 
+Exploratory data analysis is the process to get to know your data, so that a hypothesis can be generated and later tested. Visualization techniques are usually applied to aid the exploration of the data.
+
+To get introduced to the dataset, we use DataExplorer's `introduce()` function:
+
+```{r}
+kable(t(introduce(crime_train)), row.names = TRUE, col.names = "", format.args = list(big.mark = ","))
+```
+  
+  
+Using dplyr's ```glimpse()```^[https://www.rdocumentation.org/packages/dplyr/versions/0.3/topics/glimpse] function, we can take a "glimpse" into the both the `crime_train` and `crime_test` data respectively, and easily see the dimensions, variable names and types.  
+  
+From the `glimpse()`, in the `crime_train` dataset, we confirm the two variables `chas` and `target` are factors^[https://www.stat.berkeley.edu/~s133/factors.html#] as noted in the description of variables above. These variables will be transformed in our data preparation stage.
 ```{r}
 glimpse(crime_train)
  
+glimpse(crime_test)
 ```
+  
+
+Next, we proceed with our exploratory data analysis by providing univariate descriptive statistics on our training dataset, `crime_train`.
 
 ```{r}
 descr(crime_train,
-  headings = FALSE, #remove headings
-  stats = "common",# most common descriptive statistics, default is all
+  headings = FALSE, #remove headings# 
   transpose = TRUE #allows for better display due to large amount of variables
   ) %>% 
   kbl(caption = "Univariate Descriptive Statistics - Training Data Set") %>%
@@ -80,22 +97,19 @@ descr(crime_train,
 
 ```
 
-```{r}
-missmap(crime_train, main = "Missing vs Observed Values")
-```
 
-In the histogram plot below, we see that `medv`, and `rm` are normally distributed. We also see bi-modal distribution of the variables `indus`, `rad` and `tax`. The rest of the variables show moderate to high skewness on either side respectively.
+Furthermore, in the histogram plot below, we see that `medv`, and `rm` are normally distributed. We also note bi-modal distribution of the variables `indus`, `rad` and `tax`. The rest of the variables show moderate to high skewness on either side respectively.
 ```{r}
 # distribution of the varaibles
-crime_train %>%
-  gather(key, value, -c(target, chas)) %>%
-  ggplot(aes(value)) +
-  geom_histogram(binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3)), fill="steelblue") +
-  facet_wrap(~ key, scales = 'free', ncol = 3) +
-  theme_minimal()
+crime_train %>% 
+  gather(variable, value, zn:target) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
 ```
 
-In the box-plot figure below, we see many variables exhibit outliers We also see very high interquartile range for rad and tax variables where crime rate is above the median. Lastly, the variance between the 2 values of target differs for `zn`, `nox`, `age`, `dis`, `rad` & `tax`, which indicates that we will want to consider adding quadratic terms for them.
+In the box-plot figure below, we see many variables exhibit outliers We also see very high interquartile range for `rad` and `tax` variables where crime rate is above the median. Lastly, the variance between the 2 values of target differs for `zn`, `nox`, `age`, `dis`, `rad` & `tax`, which indicates that we will want to consider adding quadratic terms for them.
 
 ```{r}
 crime_train %>%
@@ -110,18 +124,36 @@ crime_train %>%
   theme_minimal()
 ```
 
-In the correlation table and plot below, we see moderate positive correlation between variables nox, age, rad, tax, indus and target variables; and moderate negative correlation between variable dis. And the rest of the variables have weak or no correlations.
+
+
+In order to investigate if there is existing correlation between the data and the target variable, we obtain the values of correlation as well as a visualization. 
+
+The correlation table and plot below, we see moderate positive correlation between variables `nox`, `age`, `rad`, `tax`, `indus` and `target` variables; and moderate negative correlation between variable dis. And the rest of the variables have weak or no correlations.
 ```{r}
 kable(sort(cor(dplyr::select(crime_train, target, everything()))[,1], decreasing = T), col.names = c("Correlation")) %>% 
   kable_styling(full_width = F)
-```
 
+```
+  
+Below is a correlation matrix of the feature variables in our dataset. The correlation matrix confirms that multicollinearity is a concern.
 
 ```{r fig.height = 7, fig.width = 7, warning=FALSE}
 numeric_values <- crime_train %>% select_if(is.numeric)
 train_cor <- cor(numeric_values)
 corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", lower="circle")
 ```
+  
+Lastly, we proceed to check if there are any missing data point in the `crime_train`
+
+```{r}
+map(crime_train, ~sum(is.na(.))) %>% t()
+```
+
+```{r}
+missmap(crime_train, main = "Missing vs Observed Values")
+```
+
+
 
 # Data Preparation {.tabset}
 
@@ -144,18 +176,76 @@ crime_train_trans <- crime_train %>%
          nox = I(nox^2))
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 # histogram distribution of the transformed variables
-crime_train_trans%>%
-  gather(key, value, -c(target, chas)) %>%
-  ggplot(aes(value)) +
-  geom_histogram(binwidth = function(x) 2 * IQR(x) / (length(x)^(1/3)), fill="steelblue") +
+crime_train_trans %>% 
+  gather(key, value, c(age, lstat, zn, rad, nox)) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
   facet_wrap(~ key, scales = 'free', ncol = 3) +
-  theme_minimal()
+  labs(x = element_blank(), y = element_blank())
+
+```
+    
+**Feature Engineering**  
+In an effort to fine tune our model, we will introduce the use of feature engineering on select variables.  
+
+* `ptratio_indicator` assigned a value of 1 if the pupil to teacher ratio is > 16, 0 if `ptratio` is greater than 16 ^[https://www.publicschoolreview.com/average-student-teacher-ratio-stats/national-data]  
+* `lstat_indicator` assigned a value of 1 if > 15 % of the population is considered low status, 0 otherwise
+* `dis_indicator` assigned a value of 1 if the distance from employment centers is > 4, 0 if `dis` is less than 4 (mean value: 3.8)
+
+```{r}
+#make a copy of original dataset
+train <- crime_train
+
+#convert chas and target to target factors
+train$chas <- as.factor(train$chas)
+train$target <- as.factor(train$target)
+
+#add new variables
+train$ptratio_indicator <- as.factor(ifelse(train$ptratio > 16, 1, 0))
+train$lstat_indicator <- as.factor(ifelse(train$lstat > 15, 1, 0))
+train$dis_indicator <- as.factor(ifelse(train$dis > 4, 1, 0))
+
+```
+
+```{r}
+glimpse(train)
 ```
 
 
 # Build Models {.tabset}
+
+```{r}
+fit <- glm(target~., family = "binomial", data = train)
+
+summary(fit)
+```
+
+Confidence intervals for the regression coefficients:
+```{r}
+confint.default(fit)
+
+exp(cbind(OR=coef(fit), confint.default(fit)))
+```
+The odds ratio would indicate the multiplicative change in odds of crime for every one unit increase on a predictor variable.  
+Odds-ratios for coefficients:
+```{r}
+exp(coef(fit))
+
+```
+Intercept only model:
+```{r}
+fit_null <- glm(target~1,data=train, family="binomial")
+summary(fit_null)
+```
+
+
+To determine if the full model has significant improvement in fit over the null model, we make use of the `anova()` function.
+```{r}
+anova(fit_null,fit,test="LRT")
+```
+
 
 # Select Models {.tabset}
 

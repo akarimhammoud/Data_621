@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/821642/9a0ad585640b4613890ecf384fde2ce6
+bundleId: https://api.rpubs.com/api/v1/document/821642/9a0ad585640b4613890ecf384fde2ce6
+url: http://rpubs.com/gpmartinez/821642
+when: 1634354093.51528
+lastSyncTime: 1634354093.51528
