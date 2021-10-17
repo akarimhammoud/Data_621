@@ -144,39 +144,3 @@ summary(Model2)
 
 
 ## Thrid Model
-
-LASSO Regression lets check to see if it can give us a better coefficient value.
-
-```{r eval=FALSE, include=FALSE}
-X <- train_log %>% dplyr::select(-target)
-X <- data.matrix(X)
-#X <- as.matrix(X, ncol=12)
-y <- as.factor(train_log$target)
-
-aucDF <- X
-lasso.model = cv.glmnet(X, y, family = "binomial", type.measure = 'class')
-
-aucDF$lasso.prob <- predict(lasso.model, type="response", newx = X, s = 'lambda.1se')
-pred <- prediction(aucDF$lasso.prob, y)
-
-
-cvfit = cv.glmnet(X, y, family = "binomial", type.measure = "class")
-plot(cvfit)
-coef(cvfit, s = "lambda.1se")
-```
-
-
-```{r}
-model1 <- glm(target ~ . -tax -rm -chas - age -indus, 
-              family = binomial(link = "logit"), 
-              train)
-summary(model1)
-evaluation$model1 <- ifelse(predict.glm(model1, test,"response") < 0.5, 0, 1)
-cm <- confusionMatrix(factor(test$model1), factor(test$target),"1")
-results <- rbind(results,tibble(model = "model1",
-                                predictors = 6,F1 = cm$byClass[7],
-                                deviance=model1$deviance, 
-                                r2 = 1-model1$deviance/model1$null.deviance,
-                                aic=model1$aic))
-cm
-```
