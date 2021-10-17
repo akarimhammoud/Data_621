@@ -54,7 +54,7 @@ library(pROC)
 library(Amelia)
 library(summarytools)
 library(DataExplorer)
-
+library(knitr)
 library(dplyr)
 ```
 
@@ -156,37 +156,6 @@ missmap(crime_train, main = "Missing vs Observed Values")
 
 
 # Data Preparation {.tabset}
-
-Some of the variables are skewed, have outliers or follow a bi-modal distribution. Therefore, we will perform transformation on some of these variables. First, we will remove the variable `tax` due to multicollinearity and it’s high VIF score. Next, we will take log() transformation of `age` and `lstat` variables to lower skewness. Lastly, we will add quadratic term to `zn`, `rad`, and `nox` variables to account for its variances with respect to target variable.
-
-```{r}
-# find multicollinear variables
-kable((car::vif(glm(target ~. , data = crime_train))), col.names = c("VIF Score")) %>%  #remove tax for high vif score
-  kable_styling(full_width = F)
-```
-
-```{r}
-# transformation of the variables. 
-crime_train_trans <- crime_train %>%
-  dplyr::select(-tax) %>% 
-  mutate(age = log(age),
-         lstat = log(lstat),
-         zn = zn^2,
-         rad = rad^2,
-         nox = I(nox^2))
-```
-
-```{r message=FALSE, warning=FALSE}
-# histogram distribution of the transformed variables
-crime_train_trans %>% 
-  gather(key, value, c(age, lstat, zn, rad, nox)) %>%
-  ggplot(., aes(value)) + 
-  geom_density(fill = "steelblue", color="steelblue") + 
-  facet_wrap(~ key, scales = 'free', ncol = 3) +
-  labs(x = element_blank(), y = element_blank())
-
-```
-    
 **Feature Engineering**  
 In an effort to fine tune our model, we will introduce the use of feature engineering on select variables.  
 
@@ -198,54 +167,105 @@ In an effort to fine tune our model, we will introduce the use of feature engine
 #make a copy of original dataset
 train <- crime_train
 
-#convert chas and target to target factors
+#convert chas and target to factors
 train$chas <- as.factor(train$chas)
 train$target <- as.factor(train$target)
 
 #add new variables
-train$ptratio_indicator <- as.factor(ifelse(train$ptratio > 16, 1, 0))
-train$lstat_indicator <- as.factor(ifelse(train$lstat > 15, 1, 0))
-train$dis_indicator <- as.factor(ifelse(train$dis > 4, 1, 0))
+train$ptratio_indicator <- as.factor(ifelse(train$ptratio < 16, 1, 0))
+train$lstat_indicator <- as.factor(ifelse(train$lstat < 15, 1, 0))
+train$dis_indicator <- as.factor(ifelse(train$dis < 4, 1, 0))
+train$age_greater_than_77 <- as.factor(ifelse(train$age >= 77, 1, 0)) #median age is 77
 
+```
+
+
+
+
+**Data Transformation**
+Some of the variables are skewed, have outliers or follow a bi-modal distribution. Therefore, we will perform transformation on some of these variables. First, we will remove the variable `tax` due to multicollinearity and it’s high VIF score. Next, we will take log() transformation of `age` and `lstat` variables to lower skewness. Lastly, we will add quadratic term to `zn`, `rad`, and `nox` variables to account for its variances with respect to target variable.
+
+```{r}
+#MI find multicollinear variables
+kable((car::vif(glm(target ~. , data = crime_train))), col.names = c("VIF Score")) %>%  #remove tax for high vif score
+  kable_styling(full_width = F)
 ```
 
 ```{r}
-glimpse(train)
+# MI transformation of the variables. 
+trans_train <- train %>%
+  dplyr::select(-tax) %>% 
+  mutate(age = log(age),
+         lstat = log(lstat),
+         zn = zn^2,
+         rad = rad^2,
+         nox = I(nox^2))
 ```
+
+```{r message=FALSE, warning=FALSE}
+# MI histogram distribution of the transformed variables
+trans_train %>% 
+  gather(key, value, c(age, lstat, zn, rad, nox)) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~ key, scales = 'free', ncol = 3) +
+  labs(x = element_blank(), y = element_blank())
+
+```
+
 
 
 # Build Models {.tabset}
 
-```{r}
-fit <- glm(target~., family = "binomial", data = train)
+First, we begin by building the null binary regression model. We will use this model to compare it to the subsequent models we build.
 
-summary(fit)
+Coefficients for the null or Intercept only model:
+```{r}
+null_model <- glm(target~1,data=train, family="binomial"(link = "logit"))
+summary(null_model)
 ```
 
+Next we proceed to make our first model using the both the original, untransformed variables and the engineered features.
+```{r}
+model_1 <- glm(target~., family = "binomial"(link = "logit"), data = train)
+
+summary(model_1)
+```
+  
 Confidence intervals for the regression coefficients:
 ```{r}
-confint.default(fit)
+confint.default(model_1)
 
-exp(cbind(OR=coef(fit), confint.default(fit)))
+exp(cbind(OR=coef(model_1), confint.default(model_1)))
 ```
+  
 The odds ratio would indicate the multiplicative change in odds of crime for every one unit increase on a predictor variable.  
 Odds-ratios for coefficients:
 ```{r}
-exp(coef(fit))
-
+exp(coef(model_1))
 ```
-Intercept only model:
+    
+For our second model, we will use the `trans_train` dataset which includes the transformed variables in the previous section in addition to the engineered features.
 ```{r}
-fit_null <- glm(target~1,data=train, family="binomial")
-summary(fit_null)
+model_2 <- glm(target~ .,family = binomial(link = "logit"), data = trans_train)
+
+summary(model_2)
 ```
 
-
-To determine if the full model has significant improvement in fit over the null model, we make use of the `anova()` function.
+For our third model: 
 ```{r}
-anova(fit_null,fit,test="LRT")
+trans_train_mod_3 <- trans_train %>% 
+  dplyr::select(1:12)
+
+model_3 <- glm(target ~ . -rm -chas - age -indus, 
+             family = binomial(link = "logit"), 
+             trans_train_mod_3)
+summary(model_3)
 ```
 
 
 # Select Models {.tabset}
-
+To determine if the models produced have significant improvement in fit over the null model, we make use of the `anova()` function.
+```{r}
+anova(null_model,model_1,model_2,model_3,test="LRT")
+```
