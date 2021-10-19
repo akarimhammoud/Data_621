@@ -143,7 +143,7 @@ train_cor <- cor(numeric_values)
 corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", lower="circle")
 ```
   
-Lastly, we proceed to check if there are any missing data point in the `crime_train`
+Lastly, we proceed to check if there are any missing data points in the `crime_train`
 
 ```{r}
 map(crime_train, ~sum(is.na(.))) %>% t()
@@ -176,9 +176,12 @@ train$ptratio_indicator <- as.factor(ifelse(train$ptratio < 16, 1, 0))
 train$lstat_indicator <- as.factor(ifelse(train$lstat < 15, 1, 0))
 train$dis_indicator <- as.factor(ifelse(train$dis < 4, 1, 0))
 train$age_greater_than_77 <- as.factor(ifelse(train$age >= 77, 1, 0)) #median age is 77
-
 ```
 
+
+```{r}
+str(train)
+```
 
 
 
@@ -211,6 +214,10 @@ trans_train %>%
   facet_wrap(~ key, scales = 'free', ncol = 3) +
   labs(x = element_blank(), y = element_blank())
 
+```
+
+```{r}
+str(trans_train)
 ```
 
 
