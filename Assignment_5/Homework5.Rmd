@@ -1,0 +1,159 @@
+---
+title: "DATA 621 Homework 5"
+author: "Group 2"
+---
+
+### Overview
+A large wine manufacturer is studying the data in order to predict the number of wine cases ordered based upon the wine characteristics. If the wine manufacturer can predict the number of cases, then that manufacturer will be able to adjust their wine offering to maximize sales.
+
+Your objective is to build a count regression model to predict the number of cases of wine that will be sold 
+given certain properties of the wine.
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(dplyr)
+library(reshape)
+library(ggplot2)
+library(purrr)
+library(psych)
+library(tidyr)
+```
+
+### Load Data
+Load the wine training data
+```{r echo=FALSE}
+# load data
+data <- read.csv('wine-training-data.csv')
+head(data,2)
+```
+
+Load the wine evaluation data
+```{r echo=False}
+# load data
+eval_data <- read.csv('wine-evaluation-data.csv')
+head(eval_data,2)
+
+```
+
+
+
+### Describe the Data
+```{r}
+instances = dim(data)[1]
+features = dim(data)[2]
+cat('Dataset for this assignment is', instances, 'instances and', features, 'features')
+```
+
+### Missing Values Count 
+```{r}
+map(data, ~sum(is.na(.))) %>% t()
+```
+
+### Describe data
+```{r}
+describe(data)
+```
+
+### Boxplot the data
+```{r}
+meltData <- melt(data)
+boxplot(data=meltData, value~variable)
+
+p <- ggplot(meltData, aes(factor(variable), value)) 
+p + geom_boxplot() + facet_wrap(~variable, scale="free")
+
+```
+
+### Data correlations
+```{r}
+res_vector  <- vector()
+colnames_vector <- colnames(data)
+
+for(i in 1:ncol(data)) {
+  
+  res <- cor.test(data[ , i], data$TARGET, 
+                    method = "pearson")
+  
+  res_round = round(res$estimate,4)
+  
+  res_vector <- c(res_vector, res_round)
+}
+
+corrdf <- data.frame(colnames_vector, res_vector)
+corrdf_sort <- corrdf %>% arrange(desc(res_vector))
+
+#Remove TARGET from correlation df
+corrdf_sort = corrdf_sort[-c(1),]
+
+corrdf_sort
+```
+
+```{r}
+#Plot the correlations
+ggplot(corrdf_sort, aes(x=reorder(colnames_vector,res_vector), y=res_vector)) +
+  geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle = 90, size = 10))
+```
+
+### Recommendations
+1. <I> Address Missing Values: </I> The features below have missing values.  Recommendation to address this for each feature is...  
+a. <I>Residual Sugar (616):</I> replace missing values with mean because normal dist, corr w/target is 0, & most target values have a similar mean. <br>
+b. <I>Chlorides (638):</I> same as Residual Sugar <br>
+c. <I>Free Sulfur Dioxide (647):</I> same as Residual Sugar  <br>
+d. <I>Total Sulfur Dioxide (682):</I> same as Residual Sugar (considered using median, but mean is 120 and median is 123, so not much difference)  <br>
+e. <I>PH (395):</I> same as Residual Sugar  <br>
+f. <I>Sulphates (1210): same as Residual Sugar</I>  
+g. <I>Alcohol (653):</I> replace missing values with mean.  Correlation is higher on this feature at around 12%  <br>
+h. <I>Stars (3359):</I> values are 1 to 4.  replace missing values with a 0 to indicate no ranking provided. <br>
+<br>
+2. <I> Apply Scalar: </I> Max values are wide ranging across the features. For example, "Volatile Acidity's" max value is 4 and "SulfurDioxide's" max value is 1038.  Recommend applying StandardScalar prior to modeling.
+
+```{r}
+#Fill in missing values in training data
+data_mv <- COPY<-data.frame(data)
+
+data_mv = data_mv %>% replace_na(list(STARS = 0))
+
+for(i in 1:ncol(data_mv)){
+  data_mv[is.na(data_mv[,i]), i] <- mean(data_mv[,i], na.rm = TRUE)
+}
+```
+
+```{r}
+#Fill in missing values in evaluation data
+eval_data_mv <- COPY<-data.frame(eval_data)
+
+eval_data_mv = eval_data_mv %>% replace_na(list(STARS = 0))
+
+for(i in 1:ncol(eval_data_mv)){
+  eval_data_mv[is.na(eval_data_mv[,i]), i] <- mean(eval_data_mv[,i], na.rm = TRUE)
+}
+
+```
+
+
+```{r}
+#Apply scalarization to training and evaluation data
+data_mv_scaled = scale(data_mv)
+
+eval_data_mv_scaled = scale(eval_data_mv, center=attr(data_mv_scaled, "scaled:center"), 
+                              scale=attr(data_mv_scaled, "scaled:scale"))
+
+```
+
+Output training and evaluation csv's with missing values replaced, and csv's that are scaled 
+```{r}
+#Training
+write.csv(data_mv, "wine-training-data-mv.csv")
+write.csv(data_mv_scaled, "wine-training-data-mv-scaled.csv")
+
+#Evaluation
+write.csv(eval_data_mv, "wine-evaluation-data-mv.csv")
+write.csv(eval_data_mv_scaled, "wine-evaluation-data-mv-scaled.csv")
+```
+
