@@ -1,0 +1,293 @@
+---
+title: "Data 621: Homework 4 - Data Exploration & Data Preparation"
+author: "Matthew Lucich"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, results = TRUE, fig.show = "show", message = FALSE)
+```
+
+
+```{r load-packages}
+library(tidyverse)
+library(ggplot2)
+library(mice)
+library(car)
+library(Hmisc)
+library(corrplot)
+```
+
+
+### Load Data
+
+```{r}
+# Load insurance csv
+df_ins <- read.csv("insurance_training_data.csv")
+
+# Removing index has instructed
+df_ins <- subset(df_ins, select = -c(INDEX))
+
+# Preview data
+glimpse(df_ins)
+
+```
+
+
+
+## DATA CLEANING
+
+
+
+### Fix formatting
+
+```{r}
+
+
+remove_z <-  function(x){
+  str_replace(x, 'z_', '')
+}
+
+# Remove extraneous z_
+df_ins <- mutate_all(df_ins, funs(remove_z))
+
+
+remove_dollar <-  function(x){
+  str_replace(x, '\\$', '')
+}
+
+# Remove dollar sign from variables
+df_ins <- mutate_all(df_ins, funs(remove_dollar))
+
+remove_comma <- function(x){
+  str_replace(x, ',', '')
+}
+
+# Remove commas from variables
+df_ins <- mutate_all(df_ins, funs(remove_comma))
+
+# Preview updated data
+glimpse(df_ins)
+
+```
+
+
+
+### Review distinct values
+
+```{r}
+
+# Count of distinct values for each column
+df_ins %>% summarise_all(n_distinct)
+
+df_ins %>% distinct(PARENT1)
+
+df_ins %>% distinct(MSTATUS)
+
+df_ins %>% distinct(SEX)
+
+df_ins %>% distinct(EDUCATION)
+
+df_ins %>% distinct(JOB)
+
+df_ins %>% distinct(CAR_USE)
+
+df_ins %>% distinct(CAR_TYPE)
+
+df_ins %>% distinct(CLM_FREQ)
+
+df_ins %>% distinct(REVOKED)
+
+df_ins %>% distinct(URBANICITY)
+
+```
+
+
+
+
+
+### Convert datatypes 
+
+```{r}
+
+# Set data types for variables
+df_ins_clean <- df_ins %>% transform(TARGET_FLAG = as.factor(TARGET_FLAG), 
+               TARGET_AMT = as.numeric(TARGET_AMT),
+               KIDSDRIV = as.factor(KIDSDRIV),
+               AGE = as.numeric(AGE),
+               HOMEKIDS = as.factor(HOMEKIDS),
+               YOJ = as.numeric(YOJ),
+               INCOME = as.numeric(INCOME),
+               PARENT1 = as.factor(PARENT1),
+               HOME_VAL = as.numeric(HOME_VAL),
+               MSTATUS = as.factor(MSTATUS),
+               SEX = as.factor(SEX),
+               EDUCATION = as.factor(EDUCATION),
+               JOB = as.factor(JOB),
+               TRAVTIME = as.numeric(TRAVTIME),
+               CAR_USE = as.factor(CAR_USE),
+               BLUEBOOK = as.numeric(BLUEBOOK),
+               TIF = as.numeric(TIF), # factor or numeric?
+               CAR_TYPE = as.factor(CAR_TYPE),
+               RED_CAR = as.factor(RED_CAR),
+               OLDCLAIM = as.numeric(OLDCLAIM),
+               CLM_FREQ = as.ordered(CLM_FREQ),  # factor or numeric?
+               REVOKED = as.factor(REVOKED),
+               MVR_PTS = as.numeric(MVR_PTS),
+               CAR_AGE = as.numeric(CAR_AGE),
+               URBANICITY = as.factor(URBANICITY))
+
+# Confirm CLM_FREQ is an ordered factor
+is.ordered(df_ins_clean$CLM_FREQ)
+
+# Preview updated data
+glimpse(df_ins_clean)
+
+```
+
+
+
+### Review NAs
+
+```{r}
+
+colSums(is.na(df_ins_clean))
+
+df_ins_clean  %>%
+  summarise_all(list(~is.na(.)))%>%
+  pivot_longer(everything(),
+               names_to = "variables", values_to="missing") %>%
+  count(variables, missing) %>%
+  ggplot(aes(y=variables,x=n,fill=missing))+
+  geom_col()
+
+```
+
+
+
+### Data Imputation
+
+```{r}
+
+# Impute data by regression: 
+df_ins_imp <- mice(df_ins_clean, method = "norm.predict", m = 1, remove.collinear=FALSE)
+
+# Complete data 
+df_ins_imp <- complete(df_ins_imp)
+
+# Confirm no NAs remain
+colSums(is.na(df_ins_imp))
+
+```
+
+
+
+## DATA EXPLORATION
+
+### Summary statistics
+
+```{r}
+
+# Is this better?
+describe(df_ins_imp)
+
+df_ins_imp %>% select(TARGET_AMT) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(AGE) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(YOJ) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(INCOME) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(HOME_VAL) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(TRAVTIME) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(BLUEBOOK) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(TIF) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(OLDCLAIM) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(MVR_PTS) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+df_ins_imp %>% select(CAR_AGE) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
+
+```
+
+
+
+### Variables Distributions
+
+```{r}
+
+df_ins_imp %>%
+  keep(is.numeric) %>% 
+  gather() %>% # Convert to key-value pairs
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_density(fill = "steelblue", color="steelblue")
+
+```
+
+
+
+### Correlation of Variables
+
+```{r}
+
+# Visualize correlation between variables
+corrplot(cor(df_ins_imp %>% keep(is.numeric)), method="shade", shade.col=NA, tl.col="black", tl.srt=45)
+
+
+# Source: http://www.sthda.com/english/wiki/correlation-matrix-a-quick-start-guide-to-analyze-format-and-visualize-a-correlation-matrix-using-r-software
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+    )
+}
+
+# Closer look at correlations of variables
+corr_results <- rcorr(as.matrix(df_ins_imp %>% keep(is.numeric)))
+df_corr <- flattenCorrMatrix(corr_results$r, corr_results$P)
+
+# Noteworthy positive correlations
+df_corr %>% filter(cor > 0.4)
+
+# Noteworthy negative correlations
+df_corr %>% filter(cor < -0.4)
+
+```
+
+
+### Review VIF
+
+```{r}
+
+model <- lm(TARGET_AMT ~ KIDSDRIV + AGE + YOJ + INCOME + HOME_VAL + TRAVTIME + BLUEBOOK +
+            TIF + OLDCLAIM + MVR_PTS + CAR_AGE, data = df_ins_clean)
+
+vif(model)
+
+```
+
+
+
+### TBD
+
+```{r}
+
+
+```
+
+
+
+
