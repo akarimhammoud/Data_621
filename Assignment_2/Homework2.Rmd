@@ -22,7 +22,7 @@ library(dplyr)
 ```{r echo=FALSE}
 # load data
 data <- read.csv('classification-output-data.csv')
-head(data,2)
+head(data, 5)
 ```
 
 ```{r}
@@ -42,6 +42,7 @@ head(cdata,2)
 **Use the table() function to get the raw confusion matrix for the scored dataset.**
 
 ```{r}
+
 library(data.table)
 
 # Create the table
@@ -50,6 +51,7 @@ ctable
 # Create a matrix
 cmatrix = table(ctable$scored.class, ctable$class)
 cmatrix
+
 ```
 
 #### Define variables for functions
@@ -67,58 +69,69 @@ cat('True negative(TN):',TN, 'True positive(TP):',TP, 'False negative(FN):',FN, 
 **Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the accuracy of the predictions.**
 
 ```{r}
-faccuracy <- function(TP, FP, TN, FN){
-  accuracy <- sum(TP,TN)/sum(TP,FP,TN,FN)
+
+faccuracy <- function(TP, FP, TN, FN) {
+  accuracy <- sum(TP, TN) / sum(TP, FP, TN, FN)
   return(accuracy)
 }
+
 ```
 
 ### Question 4
 **Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the classification error rate of the predictions.**
 
 ```{r}
-fclass_error_rate <- function(TP, FP, TN, FN){
-  class_error_rate <- sum(FP,FN)/sum(TP,FP,TN,FN)
+
+fclass_error_rate <- function(TP, FP, TN, FN) {
+  class_error_rate <- sum(FP, FN) / sum(TP, FP, TN, FN)
   return(class_error_rate)
 }
+
 ```
 
 ### Question 5
 **Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the precision of the predictions.**
 
 ```{r}
-fprecision <- function(TP, FP){
-  precision <- TP/(TP+FP)
+
+fprecision <- function(TP, FP) {
+  precision <- TP / (TP + FP)
   return(precision)
 }
+
 ```
 
 ### Question 6
 **Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the sensitivity of the predictions. Sensitivity is also known as recall.**
 
 ```{r}
-fsensitivity <- function(TP,FN){
-  sensitivity <- TP/(TP+FN)
+
+fsensitivity <- function(TP, FN) {
+  sensitivity <- TP / (TP + FN)
   return(sensitivity)
 }
+
 ```
 
 ### Question 7
 **Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the specificity of the predictions.**
 
 ```{r}
-fspecificity <- function(FP,TN){
-  specificity <- TN/(TN+FP)
+
+fspecificity <- function(FP, TN) {
+  specificity <- TN / (TN + FP)
   return(specificity)
 }
+
 ```
 
 ### Question 8
 **Write a function that takes the data set as a dataframe, with actual and predicted classifications identified, and returns the F1 score of the predictions.**
 
 ```{r}
-fF1_score <- function(precision, sensitivity){
-  F1_score <- (2 * precision * sensitivity)/(precision + sensitivity)
+
+fF1_score <- function(precision, sensitivity) {
+  F1_score <- (2 * precision * sensitivity) / (precision + sensitivity)
   return(F1_score)
 }
 
