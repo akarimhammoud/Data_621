@@ -20,20 +20,23 @@ library(mice)
 library(car)
 library(Hmisc)
 library(corrplot)
+library(pscl)
+library(boot)
 ```
 
 
-### Load Data
+### Load data
 
 ```{r}
-# Load insurance csv
-df_ins <- read.csv("insurance_training_data.csv")
 
-# Removing index has instructed
-df_ins <- subset(df_ins, select = -c(INDEX))
+# Load insurance csv
+df_ins_raw <- read.csv("insurance_training_data.csv")
+
+# Removing index as instructed
+df_ins_raw <- subset(df_ins_raw, select = -c(INDEX))
 
 # Preview data
-glimpse(df_ins)
+glimpse(df_ins_raw)
 
 ```
 
@@ -53,7 +56,7 @@ remove_z <-  function(x){
 }
 
 # Remove extraneous z_
-df_ins <- mutate_all(df_ins, funs(remove_z))
+df_ins_raw <- mutate_all(df_ins_raw, funs(remove_z))
 
 
 remove_dollar <-  function(x){
@@ -61,17 +64,17 @@ remove_dollar <-  function(x){
 }
 
 # Remove dollar sign from variables
-df_ins <- mutate_all(df_ins, funs(remove_dollar))
+df_ins_raw <- mutate_all(df_ins_raw, funs(remove_dollar))
 
 remove_comma <- function(x){
   str_replace(x, ',', '')
 }
 
 # Remove commas from variables
-df_ins <- mutate_all(df_ins, funs(remove_comma))
+df_ins_raw <- mutate_all(df_ins_raw, funs(remove_comma))
 
 # Preview updated data
-glimpse(df_ins)
+glimpse(df_ins_raw)
 
 ```
 
@@ -82,30 +85,29 @@ glimpse(df_ins)
 ```{r}
 
 # Count of distinct values for each column
-df_ins %>% summarise_all(n_distinct)
+df_ins_raw %>% summarise_all(n_distinct)
 
-df_ins %>% distinct(PARENT1)
+df_ins_raw %>% distinct(PARENT1)
 
-df_ins %>% distinct(MSTATUS)
+df_ins_raw %>% distinct(MSTATUS)
 
-df_ins %>% distinct(SEX)
+df_ins_raw %>% distinct(SEX)
 
-df_ins %>% distinct(EDUCATION)
+df_ins_raw %>% distinct(EDUCATION)
 
-df_ins %>% distinct(JOB)
+df_ins_raw %>% distinct(JOB)
 
-df_ins %>% distinct(CAR_USE)
+df_ins_raw %>% distinct(CAR_USE)
 
-df_ins %>% distinct(CAR_TYPE)
+df_ins_raw %>% distinct(CAR_TYPE)
 
-df_ins %>% distinct(CLM_FREQ)
+df_ins_raw %>% distinct(CLM_FREQ)
 
-df_ins %>% distinct(REVOKED)
+df_ins_raw %>% distinct(REVOKED)
 
-df_ins %>% distinct(URBANICITY)
+df_ins_raw %>% distinct(URBANICITY)
 
 ```
-
 
 
 
@@ -115,7 +117,8 @@ df_ins %>% distinct(URBANICITY)
 ```{r}
 
 # Set data types for variables
-df_ins_clean <- df_ins %>% transform(TARGET_FLAG = as.factor(TARGET_FLAG), 
+df_ins_clean <- df_ins_raw %>% transform( 
+               TARGET_FLAG = as.factor(TARGET_FLAG), 
                TARGET_AMT = as.numeric(TARGET_AMT),
                KIDSDRIV = as.factor(KIDSDRIV),
                AGE = as.numeric(AGE),
@@ -144,9 +147,6 @@ df_ins_clean <- df_ins %>% transform(TARGET_FLAG = as.factor(TARGET_FLAG),
 # Confirm CLM_FREQ is an ordered factor
 is.ordered(df_ins_clean$CLM_FREQ)
 
-# Preview updated data
-glimpse(df_ins_clean)
-
 ```
 
 
@@ -155,8 +155,10 @@ glimpse(df_ins_clean)
 
 ```{r}
 
+# NA counts for each column
 colSums(is.na(df_ins_clean))
 
+# Visualize NA counts for each column
 df_ins_clean  %>%
   summarise_all(list(~is.na(.)))%>%
   pivot_longer(everything(),
@@ -169,14 +171,12 @@ df_ins_clean  %>%
 
 
 
-### Data Imputation
+### Data imputation
 
 ```{r}
 
 # Impute data by regression: 
 df_ins_imp <- mice(df_ins_clean, method = "norm.predict", m = 1, remove.collinear=FALSE)
-
-# Complete data 
 df_ins_imp <- complete(df_ins_imp)
 
 # Confirm no NAs remain
@@ -192,59 +192,176 @@ colSums(is.na(df_ins_imp))
 
 ```{r}
 
-# Is this better?
 describe(df_ins_imp)
-
-df_ins_imp %>% select(TARGET_AMT) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(AGE) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(YOJ) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(INCOME) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(HOME_VAL) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(TRAVTIME) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(BLUEBOOK) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(TIF) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(OLDCLAIM) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(MVR_PTS) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
-
-df_ins_imp %>% select(CAR_AGE) %>% summarise_all(c("mean", "median", "sd", "min", "max"))
 
 ```
 
 
 
-### Variables Distributions
+### Distributions of variables
 
 ```{r}
 
+# Histograms
 df_ins_imp %>%
   keep(is.numeric) %>% 
-  gather() %>% # Convert to key-value pairs
+  gather() %>%
   ggplot(aes(value)) +
     facet_wrap(~ key, scales = "free") +
-    geom_density(fill = "steelblue", color="steelblue")
+    geom_density(fill = "steelblue", alpha=0.9, color="steelblue") +
+    geom_histogram(aes(y=..density..), alpha=0.5, fill = "lightblue", color="lightblue", position="identity")
+
+# Boxplots
+df_ins_imp %>%
+  keep(is.numeric) %>% 
+  gather() %>%
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_boxplot(fill = "steelblue", color="black", outlier.colour="red", outlier.shape=16,
+             outlier.size=2, notch=FALSE)
 
 ```
 
 
 
-### Correlation of Variables
+### Distributions of log-transformed variables
+
+```{r, warning=FALSE}
+
+# Log transformation
+df_ins_imp_log <- df_ins_imp %>% keep(is.numeric)
+df_ins_imp_log <- log(df_ins_imp_log + 1)
+
+# Histograms of log transformed numeric variables
+df_ins_imp_log %>%
+  gather(variable, value, TARGET_AMT:CAR_AGE) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+
+# Test for normality
+shapiro.test(df_ins_imp_log$AGE[0:5000])
+
+# Visual inspection of one variable (age) for normality
+qqnorm(df_ins_imp_log$AGE, pch = 1, frame = FALSE)
+qqline(df_ins_imp_log$AGE, col = "steelblue", lwd = 2)
+
+```
+
+
+
+### Distributions of square root-transformed variables
+
+```{r, warning=FALSE}
+
+# Square root transformation
+df_ins_imp_sqrt <- sqrt(df_ins_imp %>% keep(is.numeric))
+
+# Histograms of square root transformed numeric variables
+df_ins_imp_sqrt %>%
+  gather(variable, value, TARGET_AMT:CAR_AGE) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+
+# Test for normality
+shapiro.test(df_ins_imp_sqrt$AGE[0:5000])
+
+# Visual inspection of one variable (age) for normality
+qqnorm(df_ins_imp_sqrt$AGE, pch = 1, frame = FALSE)
+qqline(df_ins_imp_sqrt$AGE, col = "steelblue", lwd = 2)
+
+```
+
+
+
+### Distributions of cube root-transformed variables
+
+```{r, warning=FALSE}
+
+# Cube root transformation
+df_ins_imp_cube <- (df_ins_imp %>% keep(is.numeric))^(1/3)
+
+# Histograms of cube root transformed numeric variables
+df_ins_imp_cube %>%
+  gather(variable, value, TARGET_AMT:CAR_AGE) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+
+# Test for normality
+shapiro.test(df_ins_imp_cube$AGE[0:5000])
+
+# Visual inspection of one variable (age) for normality
+qqnorm(df_ins_imp_cube$AGE, pch = 1, frame = FALSE)
+qqline(df_ins_imp_cube$AGE, col = "steelblue", lwd = 2)
+
+```
+
+
+
+### Create new columns with transformed variables
+
+```{r, warning=FALSE}
+
+df_ins <- df_ins_imp %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(log = ~ log(. + 1))))
+
+df_ins <- df_ins %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(sqrt = sqrt)))
+
+df_ins <- df_ins %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(cbrt = ~ .^(1/3))))
+
+glimpse(df_ins)
+
+```
+
+
+
+### Create new variables
+
+```{r}
+
+df_ins$HV_INC_RATIO <- df_ins$HOME_VAL / df_ins$INCOME
+
+df_ins$TRT_MVR_PRODUCT <- df_ins$TRAVTIME * df_ins$MVR_PTS
+
+df_ins$HV_INC_RATIO[is.nan(df_ins$HV_INC_RATIO)] <- 0
+df_ins$HV_INC_RATIO[is.infinite(df_ins$HV_INC_RATIO)] <- 0
+
+```
+
+
+### Data imputation again
+
+```{r}
+
+# Impute data by regression: 
+df_ins <- mice(df_ins, method = "norm.predict", m = 1, remove.collinear=FALSE)
+df_ins <- complete(df_ins)
+
+# Confirm no NAs remain
+colSums(is.na(df_ins))
+
+```
+
+
+
+### Correlation of variables
 
 ```{r}
 
 # Visualize correlation between variables
 corrplot(cor(df_ins_imp %>% keep(is.numeric)), method="shade", shade.col=NA, tl.col="black", tl.srt=45)
 
-
-# Source: http://www.sthda.com/english/wiki/correlation-matrix-a-quick-start-guide-to-analyze-format-and-visualize-a-correlation-matrix-using-r-software
+# Reshape correlation results
 flattenCorrMatrix <- function(cormat, pmat) {
   ut <- upper.tri(cormat)
   data.frame(
@@ -265,29 +382,38 @@ df_corr %>% filter(cor > 0.4)
 # Noteworthy negative correlations
 df_corr %>% filter(cor < -0.4)
 
+# Pair plot
+pairs(df_ins_imp %>% keep(is.numeric), lower.panel = NULL, col = "steelblue")
+
 ```
 
 
-### Review VIF
+### Check for multicollinearity
 
 ```{r}
 
-model <- lm(TARGET_AMT ~ KIDSDRIV + AGE + YOJ + INCOME + HOME_VAL + TRAVTIME + BLUEBOOK +
-            TIF + OLDCLAIM + MVR_PTS + CAR_AGE, data = df_ins_clean)
+model <- glm(TARGET_AMT ~ KIDSDRIV + AGE + YOJ + INCOME + HOME_VAL + TRAVTIME + BLUEBOOK +
+            TIF + OLDCLAIM + MVR_PTS + CAR_AGE, data = df_ins, family = "quasipoisson")
 
 vif(model)
 
 ```
 
 
+### Temp model
 
-### TBD
+```{r, warning=FALSE}
 
-```{r}
+glm_model <- glm(TARGET_AMT ~ ., data = df_ins, family = "quasipoisson")
 
+summary(glm_model)
+
+plot(glm_model)
 
 ```
 
 
+### References
 
+http://www.sthda.com/english/wiki/correlation-matrix-a-quick-start-guide-to-analyze-format-and-visualize-a-correlation-matrix-using-r-software
 
