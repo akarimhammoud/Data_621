@@ -400,6 +400,38 @@ vif(model)
 ```
 
 
+### Bucket select variables (by quantiles)
+
+```{r}
+
+# 0-.25, .25-.75, .75-1
+df_ins$CAR_AGE_fact <- cut(x = df_ins$CAR_AGE, breaks = c(-4, 3.5, 12, 28), labels = c("New", "Moderate", "Old"))
+
+# -.5, .5-.9, .9+
+df_ins$HOME_VAL_fact <- cut(x = df_ins$HOME_VAL, breaks = c(-86567, 160953, 314151, 885283), labels = c("No or Low", "Moderate", "High"))
+
+# 0-.25, .25-.75, .75-1
+df_ins$INCOME_fact <- cut(x = df_ins$INCOME, breaks = c(-31969, 27940, 85472, 367031), labels = c("Low", "Moderate", "High"))
+
+# 0-.5, .50-.75, .75-1
+df_ins$MVR_PTS_fact <- cut(x = df_ins$MVR_PTS, breaks = c(-1, 1, 3, 14), labels = c("Low", "Moderate", "High"))
+
+# 0-.75, .75-1
+df_ins$OLDCLAIM_fact <- cut(x = df_ins$OLDCLAIM, breaks = c(-1, 4636, 57038), labels = c("Low", "High"))
+
+# 0-.25, .25-.75, .75-1
+df_ins$TIF_fact <- cut(x = df_ins$TIF, breaks = c(-1, 1, 7, 26), labels = c("Low", "Moderate", "High"))
+
+# 0-.25, .25-.75, .75-1
+df_ins$TRAVTIME_fact <- cut(x = df_ins$TRAVTIME, breaks = c(4, 22, 44, 143), labels = c("Short", "Moderate", "Long"))
+
+# 0-.25, .25-.75, .75-1
+df_ins$YOJ_fact <- cut(x = df_ins$YOJ, breaks = c(-1, 9, 13, 24), labels = c("Low", "Moderate", "High"))
+
+```
+
+
+
 ### Temp model
 
 ```{r, warning=FALSE}
