@@ -1,11 +1,15 @@
 ---
-title: "Data 621: Homework 4 - Data Exploration & Data Preparation"
-author: "Matthew Lucich"
+title: "DATA 621 Assignment 4"
+author: "Critical Thinking Group 2: George Cruz Deschamps, Karim Hammoud, Maliat Islam, Matthew Lucich, Gabriella Maritnez, Ken Popkin"
+date: "Date: `r Sys.Date()` | Due: 2021-11-21" 
 output:
-  html_document: default
-  pdf_document: default
-editor_options: 
-  chunk_output_type: console
+      html_document:
+        toc: yes
+        toc_float: yes
+        theme: yeti
+        highlight: kate
+        font-family: "Arial"
+        code_folding: "show"
 ---
 
 ```{r global_options, include=FALSE}
@@ -147,6 +151,26 @@ df_ins_clean <- df_ins_raw %>% transform(
 # Confirm CLM_FREQ is an ordered factor
 is.ordered(df_ins_clean$CLM_FREQ)
 
+```
+
+```{r}
+#Show level and counts of CLM_FREQ
+table(df_ins_clean$CLM_FREQ)
+```
+
+
+```{r}
+#Is Education an ordered factor?
+#is.ordered(df_ins_clean$EDUCATION)
+
+#Convert Education to an ordered factor
+df_ins_clean$EDUCATION <- ordered(df_ins_clean$EDUCATION,levels = c("<High School", "High School", "Bachelors", "Masters", "PhD"))
+
+#Confirm if EDUCATION is ordered
+is.ordered(df_ins_clean$EDUCATION)
+
+#Show the levels
+table(df_ins_clean$EDUCATION)
 ```
 
 
@@ -431,8 +455,7 @@ df_ins$YOJ_fact <- cut(x = df_ins$YOJ, breaks = c(-1, 9, 13, 24), labels = c("Lo
 ```
 
 
-
-### Temp model
+### Baseline Quasipoisson GLM Model for `TARGET_AMT`
 
 ```{r, warning=FALSE}
 
@@ -441,6 +464,15 @@ glm_model <- glm(TARGET_AMT ~ ., data = df_ins, family = "quasipoisson")
 summary(glm_model)
 
 plot(glm_model)
+
+```
+
+
+## Multiple Regression Model
+### Baseline Model
+```{r}
+baseline_lm <- lm(TARGET_AMT ~ ., data = df_ins)
+summary(baseline_lm)
 
 ```
 
