@@ -26,6 +26,11 @@ library(Hmisc)
 library(corrplot)
 library(pscl)
 library(boot)
+library(caret)
+library(leaps)
+library(MASS)
+library(kableExtra)
+library(summarytools)
 ```
 
 
@@ -34,7 +39,7 @@ library(boot)
 ```{r}
 
 # Load insurance csv
-df_ins_raw <- read.csv("insurance_training_data.csv")
+df_ins_raw <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_4/data/insurance_training_data.csv")
 
 # Removing index as instructed
 df_ins_raw <- subset(df_ins_raw, select = -c(INDEX))
@@ -53,8 +58,6 @@ glimpse(df_ins_raw)
 ### Fix formatting
 
 ```{r}
-
-
 remove_z <-  function(x){
   str_replace(x, 'z_', '')
 }
@@ -160,9 +163,6 @@ table(df_ins_clean$CLM_FREQ)
 
 
 ```{r}
-#Is Education an ordered factor?
-#is.ordered(df_ins_clean$EDUCATION)
-
 #Convert Education to an ordered factor
 df_ins_clean$EDUCATION <- ordered(df_ins_clean$EDUCATION,levels = c("<High School", "High School", "Bachelors", "Masters", "PhD"))
 
@@ -216,7 +216,14 @@ colSums(is.na(df_ins_imp))
 
 ```{r}
 
-describe(df_ins_imp)
+#describe(df_ins_imp)
+
+descr(df_ins_imp,
+  headings = FALSE, #remove headings# 
+  transpose = FALSE #TRUE allows for better display due to large amount of variables
+  ) %>% 
+  kbl(caption = "Univariate Descriptive Statistics - Training Data Set") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
 
 ```
 
@@ -383,7 +390,7 @@ colSums(is.na(df_ins))
 ```{r}
 
 # Visualize correlation between variables
-corrplot(cor(df_ins_imp %>% keep(is.numeric)), method="shade", shade.col=NA, tl.col="black", tl.srt=45)
+corrplot.mixed(cor(df_ins_imp %>% keep(is.numeric)), tl.col = 'black', tl.pos = 'lt', upper = "number", lower="shade", shade.col=NA, tl.srt=45)
 
 # Reshape correlation results
 flattenCorrMatrix <- function(cormat, pmat) {
@@ -454,28 +461,108 @@ df_ins$YOJ_fact <- cut(x = df_ins$YOJ, breaks = c(-1, 9, 13, 24), labels = c("Lo
 
 ```
 
-
-### Baseline Quasipoisson GLM Model for `TARGET_AMT`
-
-```{r, warning=FALSE}
-
-glm_model <- glm(TARGET_AMT ~ ., data = df_ins, family = "quasipoisson")
-
-summary(glm_model)
-
-plot(glm_model)
-
-```
-
+_____
 
 ## Multiple Regression Model
-### Baseline Model
-```{r}
-baseline_lm <- lm(TARGET_AMT ~ ., data = df_ins)
-summary(baseline_lm)
 
+An error messagea was produced when initially running the `lm()` functions. After investigating the error message, it was found that the `na.exclude()`^[https://bookdown.org/egarpor/PM-UC3M/app-nas.html] function helped in resolving the issue.
+```{r}
+#removing the binary response variable, TARGET_FLAG 
+df_ins_step <- df_ins_clean %>% 
+  dplyr::select(-TARGET_FLAG)
+
+df_step_NoNA <- na.exclude(df_ins_step)
 ```
 
+First we will begin by using the `step()`^[https://stat.ethz.ch/R-manual/R-devel/library/stats/html/step.html] ^[https://www.statology.org/stepwise-regression-r/] function from the `stats` package.
+
+### Forward
+
+```{r}
+#define the intercept only model
+intercept_only <- lm(TARGET_AMT ~ 1, data = df_step_NoNA)
+
+#define model with all predictors
+all <- lm(TARGET_AMT ~., data = df_step_NoNA)
+
+#perform forward stepwise regression
+forward <- step(intercept_only, direction='forward', scope=formula(all), trace=0)
+
+#forward$anova
+
+#forward$coefficients
+
+summary(forward)
+```
+
+
+### Backward
+
+```{r}
+#perform backward stepwise regression
+backward <- step(all, direction='backward', scope=formula(all), trace=0)
+
+#view results of backward stepwise regression
+#backward$anova
+
+#view final model
+#backward$coefficients
+summary(backward)
+```
+
+### Both
+
+```{r}
+both <- step(intercept_only, direction='both', scope=formula(all), trace=0)
+#both$anova
+#both$coefficients
+summary(both)
+```
+
+_____
+
+Below we use the `stepAIC()`^[https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/stepAIC.html] from the `MASS` package to cross validate our stepwise model selection in addition to `regsubsets()`^[https://rdrr.io/cran/leaps/man/regsubsets.html] from the `leaps` package and `train()`^[https://www.rdocumentation.org/packages/caret/versions/4.47/topics/train] from the `caret` package. ^[http://www.sthda.com/english/articles/37-model-selection-essentials-in-r/154-stepwise-regression-essentials-in-r/]
+
+```{r}
+library(MASS)
+# Fit the full model 
+full.model <- lm(TARGET_AMT ~., data = df_step_NoNA)
+# Stepwise regression model
+step.model <- stepAIC(full.model, direction = "both", 
+                      trace = FALSE)
+summary(step.model)
+```
+
+```{r}
+models <- regsubsets(TARGET_AMT ~., data = df_step_NoNA, nvmax = 5,
+                     method = "seqrep")
+```
+
+```{r}
+# Set seed for reproducibility
+set.seed(123)
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+step.model <- train(TARGET_AMT ~., data = df_step_NoNA,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 1:5),
+                    trControl = train.control
+                    )
+step.model$results
+```
+
+Based on the RMSE from `step.model$results`, we see that model 5 is the best performing model. This can also be confirmed by the below function as well, `step.model$bestTune`.
+```{r}
+step.model$bestTune
+```
+
+
+```{r}
+coef(step.model$finalModel, 5)
+```
+
+_____
 
 ### References
 
