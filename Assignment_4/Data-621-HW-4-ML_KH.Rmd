@@ -442,7 +442,7 @@ df_ins$YOJ_fact <- cut(x = df_ins$YOJ, breaks = c(-1, 9, 13, 24), labels = c("Lo
 
 ### Binary Logistic Regression
 
-#### Quasipoisson NULL Model
+#### Binomial NULL Model
 
 ```{r}
 # remove set up the data
@@ -452,16 +452,15 @@ data_train <- df_ins[-c(2)]
 
 ```{r}
 
-model1 <- glm(TARGET_AMT ~ 1, data = df_ins, family = "quasipoisson")
+model1 <- glm(TARGET_FLAG ~ 1, data = data_train, family = binomial(link ="logit"))
 summary(model1)
 ```
 
-#### Quasipoisson FULL Model
+#### Binomial FULL Model
 
 ```{r, warning=FALSE}
 
-model2 <- glm(TARGET_AMT ~ ., data = df_ins, family = "quasipoisson")
-
+model2 <- glm(TARGET_FLAG ~ ., data = data_train, family = binomial(link ="logit"))
 summary(model2)
 
 plot(model2)
@@ -479,29 +478,15 @@ Generate the odds ratios
 exp(coef(model2))
 ```
 
-
-#### FULL Model
-
-```{r, warning=FALSE}
-
-model3 <- glm(TARGET_AMT ~ ., data = df_ins)
-
-summary(model3)
-
-plot(model3)
-
-```
-
-
 Generate confidence intervals for regression slope
 
 ```{r}
-confint.default(model3)
+confint.default(model2)
 ```
 
 Generate the odds ratios
 ```{r}
-exp(coef(model3))
+exp(coef(model2))
 ```
 
 
@@ -509,10 +494,10 @@ I will select the variables using the stepwise method
 
 The ‘stepAIC’ function in R performs a stepwise model selection with an objective to minimize the AIC value.
 
-**backward**
+**Using StepWise in both direction**
 
 ```{r, warning=FALSE}
-stepWise_b <- stepAIC(model3, direction = "backward")
+stepWise_b <- stepAIC(model1, scope = list(upper=model2),direction="both")
 ```
 
 
