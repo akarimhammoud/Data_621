@@ -37,8 +37,7 @@ library(summarytools)
 ### Load data
 
 ```{r}
-
-# Load insurance csv
+# Load TRAIN insurance csv
 df_ins_raw <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_4/data/insurance_training_data.csv")
 
 # Removing index as instructed
@@ -46,7 +45,17 @@ df_ins_raw <- subset(df_ins_raw, select = -c(INDEX))
 
 # Preview data
 glimpse(df_ins_raw)
+```
 
+```{r}
+#Load EVAL ins csv
+df_eval_raw <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Assignment_4/data/insurance-evaluation-data.csv")
+
+# Removing index as instructed
+df_eval_raw <- subset(df_eval_raw, select = -c(INDEX))
+
+# Preview data
+glimpse(df_eval_raw)
 ```
 
 
@@ -85,12 +94,39 @@ glimpse(df_ins_raw)
 
 ```
 
+```{r}
+#Cleaning EVAL data
+remove_z <-  function(x){
+  str_replace(x, 'z_', '')
+}
+
+# Remove extraneous z_
+df_eval_raw <- mutate_all(df_eval_raw, funs(remove_z))
+
+
+remove_dollar <-  function(x){
+  str_replace(x, '\\$', '')
+}
+
+# Remove dollar sign from variables
+df_eval_raw <- mutate_all(df_eval_raw, funs(remove_dollar))
+
+remove_comma <- function(x){
+  str_replace(x, ',', '')
+}
+
+# Remove commas from variables
+df_eval_raw <- mutate_all(df_eval_raw, funs(remove_comma))
+
+# Preview updated data
+glimpse(df_eval_raw)
+```
 
 
 ### Review distinct values
 
 ```{r}
-
+# TRAIN
 # Count of distinct values for each column
 df_ins_raw %>% summarise_all(n_distinct)
 
@@ -122,7 +158,7 @@ df_ins_raw %>% distinct(URBANICITY)
 ### Convert datatypes 
 
 ```{r}
-
+#TRAIN
 # Set data types for variables
 df_ins_clean <- df_ins_raw %>% transform( 
                TARGET_FLAG = as.factor(TARGET_FLAG), 
@@ -154,15 +190,9 @@ df_ins_clean <- df_ins_raw %>% transform(
 # Confirm CLM_FREQ is an ordered factor
 is.ordered(df_ins_clean$CLM_FREQ)
 
-```
-
-```{r}
 #Show level and counts of CLM_FREQ
 table(df_ins_clean$CLM_FREQ)
-```
 
-
-```{r}
 #Convert Education to an ordered factor
 df_ins_clean$EDUCATION <- ordered(df_ins_clean$EDUCATION,levels = c("<High School", "High School", "Bachelors", "Masters", "PhD"))
 
@@ -171,14 +201,60 @@ is.ordered(df_ins_clean$EDUCATION)
 
 #Show the levels
 table(df_ins_clean$EDUCATION)
+
 ```
 
+```{r}
+#EVAL
+# Set data types for variables
+df_eval_clean <- df_eval_raw %>% transform( 
+               TARGET_FLAG = as.factor(TARGET_FLAG), 
+               TARGET_AMT = as.numeric(TARGET_AMT),
+               KIDSDRIV = as.factor(KIDSDRIV),
+               AGE = as.numeric(AGE),
+               HOMEKIDS = as.factor(HOMEKIDS),
+               YOJ = as.numeric(YOJ),
+               INCOME = as.numeric(INCOME),
+               PARENT1 = as.factor(PARENT1),
+               HOME_VAL = as.numeric(HOME_VAL),
+               MSTATUS = as.factor(MSTATUS),
+               SEX = as.factor(SEX),
+               EDUCATION = as.factor(EDUCATION),
+               JOB = as.factor(JOB),
+               TRAVTIME = as.numeric(TRAVTIME),
+               CAR_USE = as.factor(CAR_USE),
+               BLUEBOOK = as.numeric(BLUEBOOK),
+               TIF = as.numeric(TIF), # factor or numeric?
+               CAR_TYPE = as.factor(CAR_TYPE),
+               RED_CAR = as.factor(RED_CAR),
+               OLDCLAIM = as.numeric(OLDCLAIM),
+               CLM_FREQ = as.ordered(CLM_FREQ),  # factor or numeric?
+               REVOKED = as.factor(REVOKED),
+               MVR_PTS = as.numeric(MVR_PTS),
+               CAR_AGE = as.numeric(CAR_AGE),
+               URBANICITY = as.factor(URBANICITY))
+
+# Confirm CLM_FREQ is an ordered factor
+is.ordered(df_eval_clean$CLM_FREQ)
+
+#Show level and counts of CLM_FREQ
+table(df_eval_clean$CLM_FREQ)
+
+#Convert Education to an ordered factor
+df_eval_clean$EDUCATION <- ordered(df_eval_clean$EDUCATION,levels = c("<High School", "High School", "Bachelors", "Masters", "PhD"))
+
+#Confirm if EDUCATION is ordered
+is.ordered(df_eval_clean$EDUCATION)
+
+#Show the levels
+table(df_eval_clean$EDUCATION)
+```
 
 
 ### Review NAs
 
 ```{r}
-
+#TRAIN
 # NA counts for each column
 colSums(is.na(df_ins_clean))
 
@@ -198,7 +274,7 @@ df_ins_clean  %>%
 ### Data imputation
 
 ```{r}
-
+#TRAIN
 # Impute data by regression: 
 df_ins_imp <- mice(df_ins_clean, method = "norm.predict", m = 1, remove.collinear=FALSE)
 df_ins_imp <- complete(df_ins_imp)
@@ -209,6 +285,19 @@ colSums(is.na(df_ins_imp))
 ```
 
 
+```{r}
+#EVAL
+# Impute data by regression: 
+df_eval_imp <- mice(df_eval_clean, method = "norm.predict", m = 1, remove.collinear=FALSE)
+df_eval_imp <- complete(df_eval_imp)
+
+# Confirm no NAs remain
+colSums(is.na(df_eval_imp))
+```
+
+
+_____
+_____
 
 ## DATA EXPLORATION
 
@@ -216,7 +305,7 @@ colSums(is.na(df_ins_imp))
 
 ```{r}
 
-#describe(df_ins_imp)
+describe(df_ins_imp)
 
 descr(df_ins_imp,
   headings = FALSE, #remove headings# 
@@ -280,6 +369,13 @@ qqline(df_ins_imp_log$AGE, col = "steelblue", lwd = 2)
 
 ```
 
+```{r}
+#EVAL
+# Log transformation
+df_eval_imp_log <- df_eval_imp %>% keep(is.numeric)
+df_eval_imp_log <- log(df_eval_imp_log + 1)
+```
+
 
 
 ### Distributions of square root-transformed variables
@@ -306,6 +402,11 @@ qqline(df_ins_imp_sqrt$AGE, col = "steelblue", lwd = 2)
 
 ```
 
+```{r}
+#EVAL
+# Square root transformation
+df_eval_imp_sqrt <- sqrt(df_eval_imp %>% keep(is.numeric))
+```
 
 
 ### Distributions of cube root-transformed variables
@@ -332,6 +433,11 @@ qqline(df_ins_imp_cube$AGE, col = "steelblue", lwd = 2)
 
 ```
 
+```{r}
+#EVAL
+# Cube root transformation
+df_eval_imp_cube <- (df_eval_imp %>% keep(is.numeric))^(1/3)
+```
 
 
 ### Create new columns with transformed variables
@@ -354,6 +460,21 @@ glimpse(df_ins)
 
 ```
 
+```{r}
+#EVAL
+df_eval <- df_eval_imp %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(log = ~ log(. + 1))))
+
+df_eval <- df_eval %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(sqrt = sqrt)))
+
+df_eval <- df_eval %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(cbrt = ~ .^(1/3))))
+```
+
 
 
 ### Create new variables
@@ -367,6 +488,16 @@ df_ins$TRT_MVR_PRODUCT <- df_ins$TRAVTIME * df_ins$MVR_PTS
 df_ins$HV_INC_RATIO[is.nan(df_ins$HV_INC_RATIO)] <- 0
 df_ins$HV_INC_RATIO[is.infinite(df_ins$HV_INC_RATIO)] <- 0
 
+```
+
+```{r}
+#EVAL
+df_eval$HV_INC_RATIO <- df_eval$HOME_VAL / df_eval$INCOME
+
+df_eval$TRT_MVR_PRODUCT <- df_eval$TRAVTIME * df_eval$MVR_PTS
+
+df_eval$HV_INC_RATIO[is.nan(df_eval$HV_INC_RATIO)] <- 0
+df_eval$HV_INC_RATIO[is.infinite(df_eval$HV_INC_RATIO)] <- 0
 ```
 
 
@@ -383,6 +514,17 @@ colSums(is.na(df_ins))
 
 ```
 
+
+```{r}
+# Impute data by regression: 
+df_eval <- mice(df_eval, method = "norm.predict", m = 1, remove.collinear=FALSE)
+df_eval <- complete(df_eval)
+
+# Confirm no NAs remain
+colSums(is.na(df_eval))
+
+
+```
 
 
 ### Correlation of variables
@@ -461,110 +603,167 @@ df_ins$YOJ_fact <- cut(x = df_ins$YOJ, breaks = c(-1, 9, 13, 24), labels = c("Lo
 
 ```
 
-_____
-
-## Multiple Regression Model
-
-An error messagea was produced when initially running the `lm()` functions. After investigating the error message, it was found that the `na.exclude()`^[https://bookdown.org/egarpor/PM-UC3M/app-nas.html] function helped in resolving the issue.
 ```{r}
-#removing the binary response variable, TARGET_FLAG 
-df_ins_step <- df_ins_clean %>% 
-  dplyr::select(-TARGET_FLAG)
-
-df_step_NoNA <- na.exclude(df_ins_step)
+glimpse(df_ins)
 ```
 
-First we will begin by using the `step()`^[https://stat.ethz.ch/R-manual/R-devel/library/stats/html/step.html] ^[https://www.statology.org/stepwise-regression-r/] function from the `stats` package.
-
-### Forward
-
 ```{r}
-#define the intercept only model
-intercept_only <- lm(TARGET_AMT ~ 1, data = df_step_NoNA)
+#EVAL
+# 0-.25, .25-.75, .75-1
+df_eval$CAR_AGE_fact <- cut(x = df_eval$CAR_AGE, breaks = c(-4, 3.5, 12, 28), labels = c("New", "Moderate", "Old"))
 
-#define model with all predictors
-all <- lm(TARGET_AMT ~., data = df_step_NoNA)
+# -.5, .5-.9, .9+
+df_eval$HOME_VAL_fact <- cut(x = df_eval$HOME_VAL, breaks = c(-86567, 160953, 314151, 885283), labels = c("No or Low", "Moderate", "High"))
 
-#perform forward stepwise regression
-forward <- step(intercept_only, direction='forward', scope=formula(all), trace=0)
+# 0-.25, .25-.75, .75-1
+df_eval$INCOME_fact <- cut(x = df_eval$INCOME, breaks = c(-31969, 27940, 85472, 367031), labels = c("Low", "Moderate", "High"))
 
-#forward$anova
+# 0-.5, .50-.75, .75-1
+df_eval$MVR_PTS_fact <- cut(x = df_eval$MVR_PTS, breaks = c(-1, 1, 3, 14), labels = c("Low", "Moderate", "High"))
 
-#forward$coefficients
+# 0-.75, .75-1
+df_eval$OLDCLAIM_fact <- cut(x = df_eval$OLDCLAIM, breaks = c(-1, 4636, 57038), labels = c("Low", "High"))
 
-summary(forward)
-```
+# 0-.25, .25-.75, .75-1
+df_eval$TIF_fact <- cut(x = df_eval$TIF, breaks = c(-1, 1, 7, 26), labels = c("Low", "Moderate", "High"))
 
+# 0-.25, .25-.75, .75-1
+df_eval$TRAVTIME_fact <- cut(x = df_eval$TRAVTIME, breaks = c(4, 22, 44, 143), labels = c("Short", "Moderate", "Long"))
 
-### Backward
-
-```{r}
-#perform backward stepwise regression
-backward <- step(all, direction='backward', scope=formula(all), trace=0)
-
-#view results of backward stepwise regression
-#backward$anova
-
-#view final model
-#backward$coefficients
-summary(backward)
-```
-
-### Both
-
-```{r}
-both <- step(intercept_only, direction='both', scope=formula(all), trace=0)
-#both$anova
-#both$coefficients
-summary(both)
+# 0-.25, .25-.75, .75-1
+df_eval$YOJ_fact <- cut(x = df_eval$YOJ, breaks = c(-1, 9, 13, 24), labels = c("Low", "Moderate", "High"))
 ```
 
 _____
+_____
 
-Below we use the `stepAIC()`^[https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/stepAIC.html] from the `MASS` package to cross validate our stepwise model selection in addition to `regsubsets()`^[https://rdrr.io/cran/leaps/man/regsubsets.html] from the `leaps` package and `train()`^[https://www.rdocumentation.org/packages/caret/versions/4.47/topics/train] from the `caret` package. ^[http://www.sthda.com/english/articles/37-model-selection-essentials-in-r/154-stepwise-regression-essentials-in-r/]
+## BUILD MODELS
+### Multiple Regression Models
 
+^[https://cmdlinetips.com/2020/10/4-ways-to-select-columns-from-a-dataframe-with-dplyrs-select/]
 ```{r}
-library(MASS)
-# Fit the full model 
-full.model <- lm(TARGET_AMT ~., data = df_step_NoNA)
-# Stepwise regression model
-step.model <- stepAIC(full.model, direction = "both", 
-                      trace = FALSE)
-summary(step.model)
+df_ins_mrm <- df_ins %>% 
+  dplyr::select(-TARGET_FLAG, -TARGET_AMT, -TARGET_AMT_sqrt, -TARGET_AMT_cbrt) %>% 
+  dplyr::select(TARGET_AMT_log,where(is.factor),BLUEBOOK_cbrt,INCOME_cbrt,MVR_PTS_cbrt,OLDCLAIM_cbrt,TRAVTIME_cbrt,
+                CAR_AGE_sqrt,HOME_VAL_sqrt,YOJ_sqrt, TIF_log)
+  
 ```
 
-```{r}
-models <- regsubsets(TARGET_AMT ~., data = df_step_NoNA, nvmax = 5,
-                     method = "seqrep")
+### Baseline Model
+
+First, we will begin by creating our base model by modelling the response variable `TARGET_AMT_log` to all the features.
+```{r message=FALSE, warning=FALSE}
+#fit the base lm model with no adjustments
+base.model <- train(TARGET_AMT_log ~., data = df_ins_mrm, method = "lm")
+
+summary(base.model$finalModel)
 ```
 
+Here are the results of our `base.model`, with an RMSE seen below.
 ```{r}
+base.model$results
+```
+
+### Forward Stepwise Model
+
+```{r message=FALSE, warning=FALSE}
 # Set seed for reproducibility
 set.seed(123)
 # Set up repeated k-fold cross-validation
-train.control <- trainControl(method = "cv", number = 10)
+train.control <- trainControl(method = "repeatedcv",   
+                           number = 20, repeats = 5,
+                           search = "grid")
 # Train the model
-step.model <- train(TARGET_AMT ~., data = df_step_NoNA,
-                    method = "leapBackward", 
-                    tuneGrid = data.frame(nvmax = 1:5),
+step.model <- train(TARGET_AMT_log ~., data = df_ins_mrm,
+                    method = "leapForward", 
+                    tuneGrid = data.frame(nvmax = 1:10),
                     trControl = train.control
                     )
-step.model$results
+step.model
 ```
 
-Based on the RMSE from `step.model$results`, we see that model 5 is the best performing model. This can also be confirmed by the below function as well, `step.model$bestTune`.
-```{r}
+Based on the RMSE from `step.model$results`, we see that model ten of the ten produced is the best performing model. This can also be confirmed by the below function as well, `step.model$bestTune`.
+```{r message=FALSE, warning=FALSE}
 step.model$bestTune
 ```
 
+Using the `coef()` function, we see that the feature variables and corresponding coefficients for the "best" performing model from the forward stepwise method using `StepAIC()` are:
+```{r message=FALSE, warning=FALSE}
+coef(step.model$finalModel, 10)
+```
 
+### Lasso Model
+
+As an additional model, we will run a Lasso method with our `train()` function by specifying `method = "lasso"`. 
+```{r message=FALSE, warning=FALSE}
+set.seed(456)
+fit.control <- trainControl(method = "repeatedcv",   
+                           number = 20, repeats = 5,
+                           search = "random")    
+
+lasso.model <- train(TARGET_AMT_log ~ .,
+               data = df_ins_mrm,
+               method = "lasso",  # now we're using the lasso method
+               trControl = fit.control,
+               na.action = na.omit) 
+
+lasso.model
+```
+
+### Ridge Regression Model
+
+Next, we run a Ridge Regression model with our `train()` function by specifying `method = "ridge"`
+```{r message=FALSE, warning=FALSE}
+set.seed(789)
+fit.control <- trainControl(method = "repeatedcv",   
+                           number = 20, repeats = 5,
+                           search = "random")    
+
+ridge.model <- train(TARGET_AMT_log ~ .,
+               data = df_ins_mrm,
+               method = "ridge",  
+               trControl = fit.control,
+               na.action = na.omit) 
+
+ridge.model
+```
+
+Using the `varImp()` function of the `caret` package, we can see which are the most important variables for our model.The return of `varImp()` can be passed to the `ggplot()` function to generate a visualization.^[https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236]
 ```{r}
-coef(step.model$finalModel, 5)
+ggplot(varImp(ridge.model))
 ```
 
 _____
+_____
 
-### References
+## SELECT MODELS
+### Multiple Regression Model
+
+Using the RMSE as out selection metric, of the three models produced above, forward stepwise, ridge regression, and lasso, we find that the best of the three is the ridge regression method with an RMSE of 3.246734.
+
+```{r}
+df_eval_mrm <- df_eval %>% 
+  dplyr::select(-TARGET_FLAG, -TARGET_AMT, -TARGET_AMT_sqrt, -TARGET_AMT_cbrt) %>% 
+  dplyr::select(TARGET_AMT_log,where(is.factor),BLUEBOOK_cbrt,INCOME_cbrt,MVR_PTS_cbrt,OLDCLAIM_cbrt,TRAVTIME_cbrt,
+                CAR_AGE_sqrt,HOME_VAL_sqrt,YOJ_sqrt, TIF_log)
+```
+
+```{r}
+predictions <- predict(ridge.model, df_eval_mrm)
+summary(predictions)
+```
+
+```{r}
+predicion_df <- as.data.frame(predictions) #create df for ggplot
+ggplot(predicion_df, aes(x=predictions)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white")+
+ geom_density(alpha=.2, fill="#E69F00")+
+labs(title="Predicted Value",x="TARGET_AMT", y = "Density")
+```
+
+_____
+_____
+## References
 
 http://www.sthda.com/english/wiki/correlation-matrix-a-quick-start-guide-to-analyze-format-and-visualize-a-correlation-matrix-using-r-software
 
