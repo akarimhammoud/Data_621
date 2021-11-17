@@ -682,16 +682,9 @@ lm.model <- lm(TARGET_AMT_log ~  KIDSDRIV + PARENT1 + MSTATUS + CAR_USE +
 summary(lm.model)
 ```
 
-^[https://stackoverflow.com/questions/43123462/how-to-obtain-rmse-out-of-lm-result]
+
 ```{r}
-#residual sum of squares
-RSS <- c(crossprod(lm.model$residuals))
-
-#mean squared error
-MSE <- RSS / length(lm.model$residuals)
-
-#root mean sq err
-RMSE <- sqrt(MSE)
+RMSE <- sqrt(mean(lm.model$residuals^2))
 RMSE
 ```
 
@@ -715,14 +708,8 @@ summary(step.model)
 
 
 ```{r}
-#residual sum of squares
-RSS <- c(crossprod(step.model$residuals))
-
-#mean squared error
-MSE <- RSS / length(step.model$residuals)
-
 #root mean sq err
-RMSE <- sqrt(MSE)
+RMSE <- sqrt(mean(step.model$residuals^2))
 RMSE
 ```
 
@@ -750,15 +737,10 @@ summary(wls.step.model)
 ```
 
 ```{r}
-#residual sum of squares
-RSS <- c(crossprod(wls.step.model$residuals))
-
-#mean squared error
-MSE <- RSS / length(wls.step.model$residuals)
-
 #root mean sq err
-RMSE <- sqrt(MSE)
+RMSE <- sqrt(mean(wls.step.model$residuals^2))
 RMSE
+
 ```
 
 #### Validation of Assumptions
@@ -777,7 +759,7 @@ _____
 ## SELECT MODELS
 ### Multiple Regression Model
 
-Using the RMSE as out selection metric, of the three models produced above, we find that the best of the three is the Stepwise Regression Model based on the RMSE.
+Using the RMSE as our selection metric, of the three models produced above we find that the best of the three is the Stepwise Regression Model based on the RMSE.
 
 ```{r}
 #transformed variables
@@ -789,24 +771,37 @@ df_eval_mrm <- df_eval %>%
 
 ```{r}
 #predictions with the transformed variables
-predictions <- predict(step.model, df_eval_mrm)
+predictions <- predict(step.model, df_eval_mrm, type = "response")
 summary(predictions)
 ```
 
+Histogram of Predicted `TARGET_AMT`
 ```{r}
 #this depends on the predictions variable
 predicion_df <- as.data.frame(predictions) #create df for ggplot
 
 predicion_df$values <- round((exp(predicion_df$predictions)),4)
 
+head(predicion_df$values)
+
 ggplot(predicion_df, aes(x=values)) + 
  geom_histogram(aes(y=..density..), colour="black", fill="white")+
- geom_density(alpha=.2, fill="#E69F00")+
+ geom_density(alpha=.2, fill="steelblue")+
 labs(title="Predicted Value",x="TARGET_AMT", y = "Density")
+```
+
+Histogram of Actual `TARGET_AMT`
+
+```{r}
+ggplot(df_ins, aes(x=TARGET_AMT)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white")+
+ geom_density(alpha=.2, fill="steelblue")+
+labs(title="Actual Value",x="TARGET_AMT", y = "Density")
 ```
 
 _____
 _____
+
 ## References
 
 http://www.sthda.com/english/wiki/correlation-matrix-a-quick-start-guide-to-analyze-format-and-visualize-a-correlation-matrix-using-r-software
