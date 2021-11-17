@@ -1,0 +1,110 @@
+---
+title: "DATA 621 Final Project"
+author: "Group 2"
+---
+
+### Overview
+There are millions of stray pets around the world, some of which are fortunate enough to be adopted while many others are not.  While adoption of a pet is often the definition of success, the rate at which a pet is adopted is also a key success factor - pets that take a long time to adopt contribute to over-crowded animal shelters and can prevent taking on new strays.  Sadly, pets that are not adopted eventually need to be euthanized.
+
+### Learn more about the data
+[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
+
+### What to Predict
+Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
+
+The values are determined in the following way:
+0 - Pet was adopted on the same day as it was listed.
+1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
+2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
+3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+4 - No adoption after 100 days of being listed.
+
+### This notebook...
+inputs the transformation training data and creates several models using RandomForest and XGBoost 
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(randomForest)
+require(caTools)
+```
+
+### Load Data
+Load the data
+```{r echo=FALSE}
+# load data
+data <- read.csv('./data/TrainingData/train_cleaned.csv')
+head(data,2)
+```
+
+```{r}
+data <- transform(
+  data,
+  Type=as.factor(Type),
+  #Breed1=as.factor(Breed1),
+  Gender=as.factor(Gender),
+  Color1=as.factor(Color1),
+  Color2=as.factor(Color2),
+  Color3=as.factor(Color3),
+  MaturitySize=as.factor(MaturitySize),
+  FurLength=as.factor(FurLength),
+  Vaccinated = as.factor(Vaccinated),
+  Dewormed = as.factor(Dewormed),
+  Sterilized = as.factor(Sterilized),
+  Health = as.factor(Health),
+  AdoptionSpeed = as.factor(AdoptionSpeed),
+  NumColors = as.factor(NumColors)
+)
+```
+
+
+### RandomForest Model1
+Helpful article from [TowardsDataScience](https://towardsdatascience.com/random-forest-in-r-f66adf80ec9)
+```{r}
+#Create a dataframe of features to use
+rfdata = subset(data, select = c(Type,Breed1,FurLength,Gender,Sterilized,Quantity,AgeYears,Vaccinated,AdoptionSpeed))
+dim(rfdata)
+
+```
+```{r}
+#Create train and test
+sample = sample.split(rfdata$AdoptionSpeed, SplitRatio = .75)
+train = subset(rfdata, sample == TRUE)
+test  = subset(rfdata, sample == FALSE)
+dim(train)
+dim(test)
+```
+
+```{r}
+#Run the model
+rf <- randomForest(
+  AdoptionSpeed ~ .,
+  data=train
+)
+```
+
+```{r}
+#Predict AdoptionSpeed with the model
+pred = predict(rf, newdata=test)
+```
+
+
+```{r}
+#Create a confusion matrix
+library(caret)
+
+#Creates vectors having data points
+expected_value <- factor(c(AdoptionSpeed_test))
+predicted_value <- factor(c(pred))
+ 
+#Creating confusion matrix
+caret_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expected_value, positive='1')
+ 
+#Display results 
+caret_confusion_matrix
+```
+

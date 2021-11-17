@@ -1,0 +1,130 @@
+---
+title: "DATA 621 Final Project"
+author: "Group 2"
+---
+
+### Overview
+There are millions of stray pets around the world, some of which are fortunate enough to be adopted while many others are not.  While adoption of a pet is often the definition of success, the rate at which a pet is adopted is also a key success factor - pets that take a long time to adopt contribute to over-crowded animal shelters and can prevent taking on new strays.  Sadly, pets that are not adopted eventually need to be euthanized.
+
+### Learn more about the data
+[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
+
+### What to Predict
+Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
+
+The values are determined in the following way:
+0 - Pet was adopted on the same day as it was listed.
+1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
+2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
+3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+4 - No adoption after 100 days of being listed.
+
+### This notebook...
+inputs the transformation training data and completes an analysis of the features, with visuals.
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(dplyr)
+library(reshape)
+library(ggplot2)
+library(purrr)
+library(psych)
+library(tidyr)
+library(corrplot)
+```
+
+### Load Data
+Load the data
+```{r echo=FALSE}
+# load data
+data <- read.csv('./data/TrainingData/train_cleaned.csv')
+head(data,2)
+```
+
+### Correlation of each feature to AdoptionSpeed
+```{r}
+#Function to calculate each feature's correlation to AdoptionSpeed
+correlations <- function(data) {
+  res_vector  <- vector()
+  colnames_vector <- colnames(data)
+  
+  for(i in 1:ncol(data)) {
+    
+    res <- cor.test(data[ , i], data$AdoptionSpeed, 
+                      method = "pearson")
+    
+    res_round = abs(round(res$estimate,4))
+    
+    res_vector <- c(res_vector, res_round)
+  }
+  
+  corrdf <- data.frame(colnames_vector, res_vector)
+  corrdf_sort <- corrdf %>% arrange(desc(res_vector))
+  
+  #Remove AdoptionSpeed from correlation df
+  corrdf_sort = corrdf_sort[-c(1),]
+  
+  return(corrdf_sort)
+}
+```
+
+```{r}
+#Dogs and Cats: each feature's correlation to AdoptionSpeed
+corrdf_sort = correlations(data)
+
+ggplot(corrdf_sort, aes(x=reorder(colnames_vector,res_vector), y=res_vector)) +
+  geom_bar(stat="identity") + ggtitle("Correlations to Adoption Speed - Dogs and Cats") +
+  theme(axis.text.x = element_text(angle = 90, size = 10))
+```
+
+```{r}
+#Dogs: each feature's correlation to AdoptionSpeed
+dog_data = filter(data, Type == 1)
+dog_data = subset(dog_data, select = -c(Type))
+corrdf_sort = correlations(dog_data)
+
+#Dogs: each feature's correlation to AdoptionSpeed
+ggplot(corrdf_sort, aes(x=reorder(colnames_vector,res_vector), y=res_vector)) +
+  geom_bar(stat="identity") + ggtitle("Correlations to Adoption Speed - Dogs") +
+  theme(axis.text.x = element_text(angle = 90, size = 10))
+```
+
+```{r}
+#Cats: each feature's correlation to AdoptionSpeed
+cat_data = filter(data, Type == 2)
+cat_data = subset(cat_data, select = -c(Type))
+corrdf_sort = correlations(cat_data)
+
+#Dogs: each feature's correlation to AdoptionSpeed
+ggplot(corrdf_sort, aes(x=reorder(colnames_vector,res_vector), y=res_vector)) +
+  geom_bar(stat="identity") + ggtitle("Correlations to Adoption Speed - Cats") +
+  theme(axis.text.x = element_text(angle = 90, size = 10))
+```
+
+### Visual Correlation between features
+```{r}
+corrplot.mixed(cor(data %>% keep(is.numeric)), tl.col = 'black', tl.pos = 'lt', upper = "number", lower="shade", shade.col=NA, tl.srt=45)
+```
+
+### Boxplot of each feature against AdoptionSpeed
+```{r}
+column_names = names(data)
+for(i in 1:ncol(data)) {
+  #ggplot(data, aes(data[ , i], data$AdoptionSpeed)) + geom_bar()
+  boxplot(AdoptionSpeed ~ data[ , i], data = data, main=column_names[i])
+}
+```
+
+### Barplots of each feature's value counts
+```{r}
+for(i in 1:ncol(data)) {
+  counts <- table(data[ , i])
+  barplot(counts, main=column_names[i])
+}
+```
+
