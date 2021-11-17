@@ -31,6 +31,8 @@ library(leaps)
 library(MASS)
 library(kableExtra)
 library(summarytools)
+library(stats)
+library(olsrr)
 ```
 
 
@@ -638,99 +640,135 @@ _____
 _____
 
 ## BUILD MODELS
-### Multiple Regression Models
-
 ^[https://cmdlinetips.com/2020/10/4-ways-to-select-columns-from-a-dataframe-with-dplyrs-select/]
 ```{r}
 df_ins_mrm <- df_ins %>% 
   dplyr::select(-TARGET_FLAG, -TARGET_AMT, -TARGET_AMT_sqrt, -TARGET_AMT_cbrt) %>% 
   dplyr::select(TARGET_AMT_log,where(is.factor),BLUEBOOK_cbrt,INCOME_cbrt,MVR_PTS_cbrt,OLDCLAIM_cbrt,TRAVTIME_cbrt,
                 CAR_AGE_sqrt,HOME_VAL_sqrt,YOJ_sqrt, TIF_log)
+
+df_ins_mrm<-na.exclude(df_ins_mrm)
   
 ```
 
-### Baseline Model
+### Baseline Models
 
-First, we will begin by creating our base model by modelling the response variable `TARGET_AMT_log` to all the features.
-```{r message=FALSE, warning=FALSE}
-#fit the base lm model with no adjustments
-base.model <- train(TARGET_AMT_log ~., data = df_ins_mrm, method = "lm")
+First, we will begin by creating our base models by modelling the response variable `TARGET_AMT_log` to all the features and null model.
 
-summary(base.model$finalModel)
-```
-
-Here are the results of our `base.model`, with an RMSE seen below.
 ```{r}
-base.model$results
+#null model
+null.model <- lm(TARGET_AMT_log ~ NULL, data = df_ins_mrm)
+ 
+summary(null.model)
 ```
 
-### Forward Stepwise Model
-
 ```{r message=FALSE, warning=FALSE}
-# Set seed for reproducibility
+#fit the lm model to all variables with no adjustments
+full.model <- lm(TARGET_AMT_log ~., data = df_ins_mrm)
+ 
+summary(full.model)
+```
+
+### Multiple Linear Regression Model
+
+Using the `full.model`, we create `lm.model` using only the significant variables previously identified.
+```{r}
 set.seed(123)
-# Set up repeated k-fold cross-validation
-train.control <- trainControl(method = "repeatedcv",   
-                           number = 20, repeats = 5,
-                           search = "grid")
-# Train the model
-step.model <- train(TARGET_AMT_log ~., data = df_ins_mrm,
-                    method = "leapForward", 
-                    tuneGrid = data.frame(nvmax = 1:10),
-                    trControl = train.control
-                    )
-step.model
+lm.model <- lm(TARGET_AMT_log ~  KIDSDRIV + PARENT1 + MSTATUS + CAR_USE +
+                CAR_TYPE + REVOKED + URBANICITY +BLUEBOOK_cbrt +
+                OLDCLAIM_cbrt +HOME_VAL_sqrt, 
+               data = df_ins_mrm)
+
+summary(lm.model)
 ```
 
-Based on the RMSE from `step.model$results`, we see that model ten of the ten produced is the best performing model. This can also be confirmed by the below function as well, `step.model$bestTune`.
-```{r message=FALSE, warning=FALSE}
-step.model$bestTune
-```
-
-Using the `coef()` function, we see that the feature variables and corresponding coefficients for the "best" performing model from the forward stepwise method using `StepAIC()` are:
-```{r message=FALSE, warning=FALSE}
-coef(step.model$finalModel, 10)
-```
-
-### Lasso Model
-
-As an additional model, we will run a Lasso method with our `train()` function by specifying `method = "lasso"`. 
-```{r message=FALSE, warning=FALSE}
-set.seed(456)
-fit.control <- trainControl(method = "repeatedcv",   
-                           number = 20, repeats = 5,
-                           search = "random")    
-
-lasso.model <- train(TARGET_AMT_log ~ .,
-               data = df_ins_mrm,
-               method = "lasso",  # now we're using the lasso method
-               trControl = fit.control,
-               na.action = na.omit) 
-
-lasso.model
-```
-
-### Ridge Regression Model
-
-Next, we run a Ridge Regression model with our `train()` function by specifying `method = "ridge"`
-```{r message=FALSE, warning=FALSE}
-set.seed(789)
-fit.control <- trainControl(method = "repeatedcv",   
-                           number = 20, repeats = 5,
-                           search = "random")    
-
-ridge.model <- train(TARGET_AMT_log ~ .,
-               data = df_ins_mrm,
-               method = "ridge",  
-               trControl = fit.control,
-               na.action = na.omit) 
-
-ridge.model
-```
-
-Using the `varImp()` function of the `caret` package, we can see which are the most important variables for our model.The return of `varImp()` can be passed to the `ggplot()` function to generate a visualization.^[https://towardsdatascience.com/create-predictive-models-in-r-with-caret-12baf9941236]
+^[https://stackoverflow.com/questions/43123462/how-to-obtain-rmse-out-of-lm-result]
 ```{r}
-ggplot(varImp(ridge.model))
+#residual sum of squares
+RSS <- c(crossprod(lm.model$residuals))
+
+#mean squared error
+MSE <- RSS / length(lm.model$residuals)
+
+#root mean sq err
+RMSE <- sqrt(MSE)
+RMSE
+```
+
+#### Validation of Assumptions
+
+```{r}
+par(mfrow=c(2,2))
+plot(lm.model)
+```
+
+```{r}
+ols_plot_resid_hist(lm.model)
+```
+
+### Stepwise Regression Model
+```{r}
+set.seed(456)
+step.model <- stepAIC(full.model, trace = F, direction = 'backward')
+summary(step.model)
+```
+
+
+```{r}
+#residual sum of squares
+RSS <- c(crossprod(step.model$residuals))
+
+#mean squared error
+MSE <- RSS / length(step.model$residuals)
+
+#root mean sq err
+RMSE <- sqrt(MSE)
+RMSE
+```
+
+#### Validation of Assumptions
+```{r}
+par(mfrow=c(2,2))
+plot(step.model)
+```
+
+```{r}
+ols_plot_resid_hist(step.model)
+```
+
+### Weighted Least Squares Stepwise Regression Model
+
+```{r}
+set.seed(789)
+#get the residuals from the full model
+res_sq <- full.model$residuals^2
+
+#specify the weights argument
+wls.model <- lm(TARGET_AMT_log ~ ., data = df_ins_mrm, weights = 1/res_sq)
+wls.step.model <- stepAIC(wls.model, trace = F, direction = 'backward')
+summary(wls.step.model)
+```
+
+```{r}
+#residual sum of squares
+RSS <- c(crossprod(wls.step.model$residuals))
+
+#mean squared error
+MSE <- RSS / length(wls.step.model$residuals)
+
+#root mean sq err
+RMSE <- sqrt(MSE)
+RMSE
+```
+
+#### Validation of Assumptions
+```{r}
+par(mfrow=c(2,2))
+plot(wls.step.model)
+```
+
+```{r}
+ols_plot_resid_hist(wls.step.model)
 ```
 
 _____
@@ -739,9 +777,10 @@ _____
 ## SELECT MODELS
 ### Multiple Regression Model
 
-Using the RMSE as out selection metric, of the three models produced above, forward stepwise, ridge regression, and lasso, we find that the best of the three is the ridge regression method with an RMSE of 3.246734.
+Using the RMSE as out selection metric, of the three models produced above, we find that the best of the three is the Stepwise Regression Model based on the RMSE.
 
 ```{r}
+#transformed variables
 df_eval_mrm <- df_eval %>% 
   dplyr::select(-TARGET_FLAG, -TARGET_AMT, -TARGET_AMT_sqrt, -TARGET_AMT_cbrt) %>% 
   dplyr::select(TARGET_AMT_log,where(is.factor),BLUEBOOK_cbrt,INCOME_cbrt,MVR_PTS_cbrt,OLDCLAIM_cbrt,TRAVTIME_cbrt,
@@ -749,13 +788,18 @@ df_eval_mrm <- df_eval %>%
 ```
 
 ```{r}
-predictions <- predict(ridge.model, df_eval_mrm)
+#predictions with the transformed variables
+predictions <- predict(step.model, df_eval_mrm)
 summary(predictions)
 ```
 
 ```{r}
+#this depends on the predictions variable
 predicion_df <- as.data.frame(predictions) #create df for ggplot
-ggplot(predicion_df, aes(x=predictions)) + 
+
+predicion_df$values <- round((exp(predicion_df$predictions)),4)
+
+ggplot(predicion_df, aes(x=values)) + 
  geom_histogram(aes(y=..density..), colour="black", fill="white")+
  geom_density(alpha=.2, fill="#E69F00")+
 labs(title="Predicted Value",x="TARGET_AMT", y = "Density")
