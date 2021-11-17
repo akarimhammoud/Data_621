@@ -32,6 +32,7 @@ library(corrplot)
 library(pscl)
 library(boot)
 library(MASS)
+library(caret)
 ```
 
 
@@ -445,21 +446,31 @@ df_ins$YOJ_fact <- cut(x = df_ins$YOJ, breaks = c(-1, 9, 13, 24), labels = c("Lo
 #### Binomial NULL Model
 
 ```{r}
-# remove set up the data
-data_train <- df_ins[-c(2)]
+# Remove the Target Columns and create new data frame
 
+data_train <- df_ins %>% dplyr::select(-starts_with("TARGET"))
+data_train$TARGET_FLAG <- df_ins$TARGET_FLAG
 ```
 
 ```{r}
+# Show new data frame
+head(data_train)
+```
 
+Build a Binary Logistic Regression Null model utilizing all the variables and data
+
+```{r}
+# Build the binomial null regression
 model1 <- glm(TARGET_FLAG ~ 1, data = data_train, family = binomial(link ="logit"))
 summary(model1)
 ```
 
 #### Binomial FULL Model
 
-```{r, warning=FALSE}
+Binary Logistic Regression Full model utilizing all the variables and data, This model will be considered to be valid..
 
+```{r, warning=FALSE}
+#  Binomial FULL Model
 model2 <- glm(TARGET_FLAG ~ ., data = data_train, family = binomial(link ="logit"))
 summary(model2)
 
@@ -467,25 +478,27 @@ plot(model2)
 
 ```
 
-Generate confidence intervals for regression slope
+we notice how some variables are not statistically significant; for study purposes, I will assume that this is a valid model.
 
 ```{r}
+# Generate confidence intervals for regression slope
 confint.default(model2)
 ```
 
-Generate the odds ratios
+
 ```{r}
+# Generate the odds ratios
 exp(coef(model2))
 ```
 
-Generate confidence intervals for regression slope
-
 ```{r}
+# Generate confidence intervals for regression slope
 confint.default(model2)
 ```
 
-Generate the odds ratios
+
 ```{r}
+# Generate the odds ratios
 exp(coef(model2))
 ```
 
@@ -494,24 +507,133 @@ I will select the variables using the stepwise method
 
 The ‘stepAIC’ function in R performs a stepwise model selection with an objective to minimize the AIC value.
 
-**Using StepWise in both direction**
+**Using Step in both direction**
 
-```{r, warning=FALSE}
-stepWise_b <- stepAIC(model1, scope = list(upper=model2),direction="both")
+create multiple models using the STEP function from R.
+
+```{r include=FALSE}
+step_b <- step(model1, scope = list(upper=model2),direction="both")
+```
+
+Let's check an ANOVA table based on the above testing results.
+
+```{r}
+step_b$anova
+```
+
+From the above results, it shows  that the best model is as follows:
+
+```{r}
+summary(step_b)
 ```
 
 
-Create histogram of the Probability
+We see how all the predictors are statistical significant, also, noticing how  the HOME_VAL and the INCOME are not as statistical significant compared to other variables.
+
+
+The below plot shows our fitted models vs Density.
 ```{r}
-hist(stepWise_b$fitted.values, main = " Histogram ",xlab = "Probability", col = 'skyblue3')
+hist(step_b$fitted.values, main = " Histogram ",xlab = "Fitted models", col = 'skyblue3')
 ```
 
 Show the predicted values
 ```{r}
-df_ins$Predict <- ifelse(stepWise_b$fitted.values >0.5,"pos","neg")
-head(df_ins$Predict)
+data_train$Predict <- ifelse(step_b$fitted.values >0.5,"pos","neg")
+head(data_train$Predict)
 ```
 
+
+**Confusion Matrix**
+
+Building a confusion matrix to get more insights.
+
+```{r}
+
+step_c <- data_train
+step_c$Predict = predict(step_b,type="response")
+step_c$TARGET_FLAG_Predict <- round(step_c$Predict)
+
+```
+
+```{r}
+
+cMatrix <- confusionMatrix(data = as.factor(step_c$TARGET_FLAG_Predict),
+                           reference = as.factor(step_c$TARGET_FLAG),
+                           positive = '1')
+cMatrix
+
+```
+
+We can see the accuracy is 0.7981 
+
+```{r}
+data.frame(Value = cMatrix$byClass)
+```
+
+**Binary STEP MODIFIED Model**
+
+For the following variables I will add 1 and calculate the log, to avoid errors since some entries reported 0 and log(0) will produce errors, also I will remove the variable HOMEKIDS and KIDSDRIV
+
+- Log(1 + INCOME) - Log(1 + HOME_VAL) - Log(1 + BLUEBOOK) - Log(1 + OLDCLAIM) - HOMEKIDS Remove - KIDSDRIV Remove
+
+```{r}
+
+step_modified <- glm(formula = TARGET_FLAG ~ KIDSDRIV +AGE+HOMEKIDS+YOJ+log(1 + INCOME)+PARENT1+ log(1+HOME_VAL) + MSTATUS+SEX+EDUCATION+JOB+TRAVTIME+CAR_USE+ log(1+BLUEBOOK) + TIF + CAR_TYPE + RED_CAR + log(1 + OLDCLAIM)+CLM_FREQ+REVOKED+URBANICITY+CAR_AGE, family = binomial(link = "logit"), data = data_train)
+
+```
+
+Let's see the summary:
+
+```{r}
+summary(step_modified)
+```
+
+With the transformation it looks slightly better the AIC is lower than the automatically selected model by the STEP procedure.
+    
+**Plot of standardized residuals**
+
+The below plot shows our fitted models vs the deviance standardized residuals.
+
+```{r}
+
+plot(fitted(step_modified),
+     rstandard(step_modified),
+     main = 'Standarize residuals',
+     xlab = 'Fitted values',
+     ylab = ' Residuals',
+     col = 'blue')
+
+```
+
+**Confusion Matrix**
+
+Let's check teh confusion matrix.
+
+```{r}
+
+
+step_modified_b <- step_modified
+step_modified_b$Predict = predict(step_modified,type="response")
+step_modified_b$TARGET_FLAG_Predict <- round(step_modified_b$Predict)
+
+```
+
+```{r}
+
+cMatrix <- confusionMatrix(data = as.factor(step_modified_b$TARGET_FLAG_Predict),
+                           reference = as.factor(step_modified_b$TARGET_FLAG),
+                           positive = '1')
+cMatrix
+
+```
+
+Is interesting to note that the reported Accuracy is 1
+
+From the above results, we obtain as follows:
+
+```{r}
+data.frame(Value = cMatrix$byClass)
+```
 
 
 ### References
