@@ -30,6 +30,9 @@ knitr::opts_chunk$set(warning = FALSE)
 
 ```{r}
 library(randomForest)
+require(xgboost)
+library(Matrix)
+library(caret)
 require(caTools)
 ```
 
@@ -61,50 +64,108 @@ data <- transform(
 )
 ```
 
+### Functions
+#### Function to create train and test
+```{r}
+#Create train data
+create_train_data  <- function(data) {
+  
+  sample = sample.split(data$AdoptionSpeed, SplitRatio = .75)
+  train = subset(data, sample == TRUE)
+  
+  return(train)
+}
 
-### RandomForest Model1
+#Create test data
+create_test_data  <- function(data) {
+  
+  sample = sample.split(data$AdoptionSpeed, SplitRatio = .75)
+  test  = subset(data, sample == FALSE)
+  
+  return(test)
+}
+```
+
+#### Function to create confusion matrix
+```{r}
+create_confusion_matrix <- function(pred, test){
+  
+  #Creates vectors having data points
+  AdoptionSpeed_test = as.numeric(unlist(test$AdoptionSpeed))
+  expected_value <- factor(c(AdoptionSpeed_test))
+  
+  predicted_value <- factor(c(pred))
+ 
+  #Creating confusion matrix
+  caret_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expected_value, positive='1')
+ 
+  #Results 
+  return(caret_confusion_matrix)
+}
+```
+
+### RandomForest (RF)
 Helpful article from [TowardsDataScience](https://towardsdatascience.com/random-forest-in-r-f66adf80ec9)
-```{r}
-#Create a dataframe of features to use
-rfdata = subset(data, select = c(Type,Breed1,FurLength,Gender,Sterilized,Quantity,AgeYears,Vaccinated,AdoptionSpeed))
-dim(rfdata)
 
-```
+#### RF Model #1
 ```{r}
-#Create train and test
-sample = sample.split(rfdata$AdoptionSpeed, SplitRatio = .75)
-train = subset(rfdata, sample == TRUE)
-test  = subset(rfdata, sample == FALSE)
-dim(train)
-dim(test)
-```
+#dataframe for RF model 1
+rf_model1_data = subset(data, select = c(Type,Breed1,FurLength,Gender,Sterilized,Quantity,AgeYears,Vaccinated,AdoptionSpeed))
+  
+#train, test data for RF model 1
+rf_train = create_train_data(rf_model1_data)
+rf_test = create_test_data(rf_model1_data)
 
-```{r}
-#Run the model
+#create RF model 1
 rf <- randomForest(
   AdoptionSpeed ~ .,
-  data=train
+  data=rf_train
 )
+  
+#Predict AdoptionSpeed with RF model 1
+rf_pred = predict(rf, newdata=rf_test)
+
+#Create a confusion matrix for RF model 1
+rf_confusion_matrix = create_confusion_matrix(rf_pred, rf_test)
+rf_confusion_matrix
+```
+
+### XGBoost (XG)
+#### XG Model #1
+Helpful article from [Analytics Vidyha](https://www.analyticsvidhya.com/blog/2016/01/xgboost-algorithm-easy-steps/)
+```{r}
+#dataframe for XG model 1
+xg_model1_data = subset(data, select = c(Type,Breed1,FurLength,Gender,Sterilized,Quantity,AgeYears,Vaccinated,AdoptionSpeed))
+
+#train, test data for XG model 1
+xg_train = as.matrix(create_train_data(xg_model1_data))
+xg_test = as.matrix(create_test_data(xg_model1_data))
+
+#separate out the label
+adoption_speed_train = xg_train[ , ncol(xg_train)]
+adoption_speed_test = xg_test[ , ncol(xg_test)]
+
+#drop AdoptionSpeed from train and test
+xg_train = subset(xg_train, select=-c(ncol(xg_train)))
+xg_test = subset(xg_test, select=-c(ncol(xg_test)))
+
+#XGBoost requires a dgc matrix
+xg_train=as(xg_train, "dgCMatrix")
+xg_test=as(xg_test, "dgCMatrix")
+
+#Create the model
+xg <- xgboost(data = xg_train, label = adoption_speed_train, nrounds = 25)
+
+#Predict
+xg_pred <- predict(xg, xg_test)
 ```
 
 ```{r}
-#Predict AdoptionSpeed with the model
-pred = predict(rf, newdata=test)
-```
+#Create a confusion matrix for XG model 1
+xg_pred = factor(as.integer(xg_pred))
+adoption_speed_test = factor(as.integer(adoption_speed_test))
 
-
-```{r}
-#Create a confusion matrix
-library(caret)
-
-#Creates vectors having data points
-expected_value <- factor(c(AdoptionSpeed_test))
-predicted_value <- factor(c(pred))
- 
-#Creating confusion matrix
-caret_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expected_value, positive='1')
- 
-#Display results 
-caret_confusion_matrix
+xg_confusion_matrix = confusionMatrix(xg_pred, adoption_speed_test)
+xg_confusion_matrix
 ```
 
