@@ -86,9 +86,9 @@ create_test_data  <- function(data) {
 }
 ```
 
-#### Function to create confusion matrix
+#### Function to create RF confusion matrix
 ```{r}
-create_confusion_matrix <- function(pred, test){
+create_rf_confusion_matrix <- function(pred, test){
   
   #Creates vectors having data points
   AdoptionSpeed_test = as.numeric(unlist(test$AdoptionSpeed))
@@ -97,10 +97,66 @@ create_confusion_matrix <- function(pred, test){
   predicted_value <- factor(c(pred))
  
   #Creating confusion matrix
-  caret_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expected_value, positive='1')
+  rf_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expected_value, positive='1')
  
   #Results 
-  return(caret_confusion_matrix)
+  return(rf_confusion_matrix)
+}
+```
+
+#### Function to create RF Model
+```{r}
+rf_model_func <- function(data) {
+  #train, test data for RF model 1
+  rf_train = create_train_data(data)
+  rf_test = create_test_data(data)
+  
+  #create RF model 1
+  rf <- randomForest(
+    AdoptionSpeed ~ .,
+    data=rf_train
+  )
+    
+  #Predict AdoptionSpeed with RF model 1
+  rf_pred = predict(rf, newdata=rf_test)
+  
+  #Create a confusion matrix for RF model 1
+  rf_confusion_matrix = create_rf_confusion_matrix(rf_pred, rf_test)
+  return(rf_confusion_matrix)
+}
+```
+
+#### Function to create XG Boost model
+```{r}
+xg_model_func <- function(data) {
+  #train, test data for XG model 1
+  xg_train = as.matrix(create_train_data(xg_model1_data))
+  xg_test = as.matrix(create_test_data(xg_model1_data))
+  
+  #separate out the label
+  adoption_speed_train = xg_train[ , ncol(xg_train)]
+  adoption_speed_test = xg_test[ , ncol(xg_test)]
+  
+  #drop AdoptionSpeed from train and test
+  xg_train = subset(xg_train, select=-c(ncol(xg_train)))
+  xg_test = subset(xg_test, select=-c(ncol(xg_test)))
+  
+  #XGBoost requires a dgc matrix
+  xg_train=as(xg_train, "dgCMatrix")
+  xg_test=as(xg_test, "dgCMatrix")
+  
+  #Create the model
+  xg <- xgboost(data = xg_train, label = adoption_speed_train, nrounds = 300, verbose=0)
+  
+  #Predict
+  xg_pred <- predict(xg, xg_test)
+  
+  #Create a confusion matrix for XG model 1
+  xg_pred = factor(as.integer(xg_pred))
+  adoption_speed_test = factor(as.integer(adoption_speed_test))
+  
+  xg_confusion_matrix = confusionMatrix(xg_pred, adoption_speed_test)
+  return(xg_confusion_matrix)
 }
 ```
 
@@ -112,60 +168,53 @@ Helpful article from [TowardsDataScience](https://towardsdatascience.com/random-
 #dataframe for RF model 1
 rf_model1_data = subset(data, select = c(Type,Breed1,FurLength,Gender,Sterilized,Quantity,AgeYears,Vaccinated,AdoptionSpeed))
   
-#train, test data for RF model 1
-rf_train = create_train_data(rf_model1_data)
-rf_test = create_test_data(rf_model1_data)
+rf_confusion_matrix = rf_model_func(rf_model1_data)
+rf_confusion_matrix
+```
 
-#create RF model 1
-rf <- randomForest(
-  AdoptionSpeed ~ .,
-  data=rf_train
-)
+#### RF Model #2
+```{r}
+#dataframe for RF model 2
+rf_model2_data = subset(data, select = c(Type,AgeYears,AdoptionSpeed))
   
-#Predict AdoptionSpeed with RF model 1
-rf_pred = predict(rf, newdata=rf_test)
+rf_confusion_matrix = rf_model_func(rf_model2_data)
+rf_confusion_matrix
+```
 
-#Create a confusion matrix for RF model 1
-rf_confusion_matrix = create_confusion_matrix(rf_pred, rf_test)
+#### RF Model #3
+```{r}
+#dataframe for RF model 3
+rf_model3_data = subset(data, select = c(Type,Breed1,FurLength,Gender,AgeYears,AdoptionSpeed))
+  
+rf_confusion_matrix = rf_model_func(rf_model3_data)
 rf_confusion_matrix
 ```
 
 ### XGBoost (XG)
-#### XG Model #1
 Helpful article from [Analytics Vidyha](https://www.analyticsvidhya.com/blog/2016/01/xgboost-algorithm-easy-steps/)
+#### XG Model #1
 ```{r}
 #dataframe for XG model 1
 xg_model1_data = subset(data, select = c(Type,Breed1,FurLength,Gender,Sterilized,Quantity,AgeYears,Vaccinated,AdoptionSpeed))
 
-#train, test data for XG model 1
-xg_train = as.matrix(create_train_data(xg_model1_data))
-xg_test = as.matrix(create_test_data(xg_model1_data))
-
-#separate out the label
-adoption_speed_train = xg_train[ , ncol(xg_train)]
-adoption_speed_test = xg_test[ , ncol(xg_test)]
-
-#drop AdoptionSpeed from train and test
-xg_train = subset(xg_train, select=-c(ncol(xg_train)))
-xg_test = subset(xg_test, select=-c(ncol(xg_test)))
-
-#XGBoost requires a dgc matrix
-xg_train=as(xg_train, "dgCMatrix")
-xg_test=as(xg_test, "dgCMatrix")
-
-#Create the model
-xg <- xgboost(data = xg_train, label = adoption_speed_train, nrounds = 25)
-
-#Predict
-xg_pred <- predict(xg, xg_test)
-```
-
-```{r}
-#Create a confusion matrix for XG model 1
-xg_pred = factor(as.integer(xg_pred))
-adoption_speed_test = factor(as.integer(adoption_speed_test))
-
-xg_confusion_matrix = confusionMatrix(xg_pred, adoption_speed_test)
+xg_confusion_matrix = xg_model_func(xg_model1_data)
 xg_confusion_matrix
 ```
 
+#### XG Model #2
+```{r}
+#dataframe for XG model 2
+xg_model2_data = subset(data, select = c(Type,AgeYears,AdoptionSpeed))
+
+xg_confusion_matrix = xg_model_func(xg_model2_data)
+xg_confusion_matrix
+```
+
+#### XG Model #3
+```{r}
+#dataframe for XG model 3
+xg_model3_data = subset(data, select = c(Type,Breed1,FurLength,Gender,AgeYears,AdoptionSpeed))
+
+xg_confusion_matrix = xg_model_func(xg_model3_data)
+xg_confusion_matrix
+```
