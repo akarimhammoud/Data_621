@@ -1,0 +1,143 @@
+---
+title: "DATA 621 Final Project"
+author: "Group 2"
+---
+
+### Overview
+There are millions of stray pets around the world, some of which are fortunate enough to be adopted while many others are not.  While adoption of a pet is often the definition of success, the rate at which a pet is adopted is also a key success factor - pets that take a long time to adopt contribute to over-crowded animal shelters and can prevent taking on new strays.  Sadly, pets that are not adopted eventually need to be euthanized.
+
+### Learn more about the data
+[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
+
+### What to Predict
+Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
+
+The values are determined in the following way:
+0 - Pet was adopted on the same day as it was listed.
+1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
+2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
+3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+4 - No adoption after 100 days of being listed.
+
+### This Notebook...
+The data has no missing values, but there are a number of features in text that need to be converted to some numeric value.  This notebook performs those changes.
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(dplyr)
+library(reshape)
+library(ggplot2)
+library(purrr)
+library(psych)
+library(tidyr)
+```
+
+### Load Data
+Load the data
+```{r echo=FALSE}
+# load data
+data <- read.csv('./data/TrainingData/train.csv')
+#data <- read.csv('./data/TestData/test.csv')
+head(data,2)
+```
+
+### Missing Values Count 
+There are no missing values
+```{r}
+map(data, ~sum(is.na(.))) %>% t()
+```
+
+
+### Show the type of each data
+```{r}
+str(data)
+```
+
+### New features
+AgeYears - provided in months this is too many variations.  Decided to convert to new feature of AgeYears and drop Age
+```{r}
+data$AgeYears = round(data$Age/12, 0)
+```
+
+NumColors - derived by counting the number of colors a pet has using the Color1,2, and 3 features
+- keep these features, but given there are 7 color categories the value of this feature is questionable in doubt
+- create a NumColors feature with a 1,2, or 3 respectively
+```{r}
+num_colors_vec = c()
+for (i in 1:nrow(data)){
+  ncolors = 1
+  
+  color2 <- data[i,8]
+  color3 <- data[i,9]
+  
+  if (color2 > 0){ncolors = ncolors + 1}
+  if (color3 > 0){ncolors = ncolors + 1}
+  
+  num_colors_vec <- c(num_colors_vec, ncolors)
+}
+
+data$NumColors = num_colors_vec
+```
+
+AllMeds = the sum of Vaccinated, Dewormed, and Sterilized.  Combining these into one feature could potentially reduce
+multi-collinearity
+```{r}
+data$AllMeds = data$Vaccinated + data$Dewormed + data$Sterilized
+```
+
+### Remove features 
+Remove the following features...
+Name - this is a text field and new owners can (and usually do) rename their pets, so removing this feature
+Age - replaced with AgeYears (see above)
+Breed2 - 10,700 of almost 15,000 rows are populated with 0 (unknown), so this doesn't seem like a good feature to keep
+State - initially kept this, but the correlation to AdoptionSpeed is only about 2%.  Decided to remove it
+RescuerID - common sense is that this field will not have any predictive value for adoption rate
+Description - this will have value in future analysis for NLP, but this will be evaluated differently in another notebook
+PetID - same reason as RescuerID
+
+```{r}
+data = subset(data, select = -c(Name, Age, Breed2, State, RescuerID, Description, PetID))
+```
+
+### Show the updated data type
+```{r}
+sapply(data,class)
+```
+
+#Change categorical variables from integer to factors
+```{r}
+data <- transform(
+  data,
+  Type=as.factor(Type),
+  Breed1=as.factor(Breed1),
+  Gender=as.factor(Gender),
+  Color1=as.factor(Color1),
+  Color2=as.factor(Color2),
+  Color3=as.factor(Color3),
+  MaturitySize=as.factor(MaturitySize),
+  FurLength=as.factor(FurLength),
+  Vaccinated = as.factor(Vaccinated),
+  Dewormed = as.factor(Dewormed),
+  Sterilized = as.factor(Sterilized),
+  Health = as.factor(Health),
+  AdoptionSpeed = as.factor(AdoptionSpeed),
+  NumColors = as.factor(NumColors)
+)
+```
+
+
+```{r}
+head(data)
+```
+
+###Output an updated csv 
+```{r}
+write.csv(data, './data/TrainingData/train_cleaned.csv',row.names = FALSE)
+#write.csv(data, './data/TestData/test_cleaned.csv',row.names = FALSE)
+```
+

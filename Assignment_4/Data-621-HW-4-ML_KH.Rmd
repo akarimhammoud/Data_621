@@ -1,0 +1,642 @@
+---
+title: "Data 621: Homework 4 - Data Exploration & Data Preparation"
+author: "George Cruz Deschamps, Karim Hammoud, Maliat Islam, Matthew Lucich, Gabriella Maritnez, Ken Popkin"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+**DATA 621 – Business Analytics and Data Mining**
+**Homework #4 Assignment Requirements**
+
+**Overview**
+`In this homework assignment, you will explore, analyze and model a data set containing approximately 8000 records representing a customer at an auto insurance company. Each record has two response variables. The first response variable, TARGET_FLAG, is a 1 or a 0. A “1” means that the person was in a car crash. A zero means that the person was not in a car crash. The second response variable is TARGET_AMT. This value is zero if the person did not crash their car. But if they did crash their car, this number will be a value greater than zero.`
+
+`Your objective is to build multiple linear regression and binary logistic regression models on the training data to predict the probability that a person will crash their car and also the amount of money it will cost if the person does crash their car. You can only use the variables given to you (or variables that you derive from the variables provided).`
+
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(eval = TRUE, results = TRUE, fig.show = "show", message = FALSE)
+```
+
+
+```{r load-packages}
+library(tidyverse)
+library(ggplot2)
+library(mice)
+library(car)
+library(Hmisc)
+library(corrplot)
+library(pscl)
+library(boot)
+library(MASS)
+library(caret)
+```
+
+
+### Load data
+
+```{r}
+
+# Load insurance csv
+df_ins_raw <- read.csv("insurance_training_data.csv")
+
+# Removing index as instructed
+df_ins_raw <- subset(df_ins_raw, select = -c(INDEX))
+
+# Preview data
+glimpse(df_ins_raw)
+
+```
+
+
+
+## DATA CLEANING
+
+
+
+### Fix formatting
+
+```{r}
+
+
+remove_z <-  function(x){
+  str_replace(x, 'z_', '')
+}
+
+# Remove extraneous z_
+df_ins_raw <- mutate_all(df_ins_raw, funs(remove_z))
+
+
+remove_dollar <-  function(x){
+  str_replace(x, '\\$', '')
+}
+
+# Remove dollar sign from variables
+df_ins_raw <- mutate_all(df_ins_raw, funs(remove_dollar))
+
+remove_comma <- function(x){
+  str_replace(x, ',', '')
+}
+
+# Remove commas from variables
+df_ins_raw <- mutate_all(df_ins_raw, funs(remove_comma))
+
+# Preview updated data
+glimpse(df_ins_raw)
+
+```
+
+
+
+### Review distinct values
+
+```{r}
+
+# Count of distinct values for each column
+df_ins_raw %>% summarise_all(n_distinct)
+
+df_ins_raw %>% distinct(PARENT1)
+
+df_ins_raw %>% distinct(MSTATUS)
+
+df_ins_raw %>% distinct(SEX)
+
+df_ins_raw %>% distinct(EDUCATION)
+
+df_ins_raw %>% distinct(JOB)
+
+df_ins_raw %>% distinct(CAR_USE)
+
+df_ins_raw %>% distinct(CAR_TYPE)
+
+df_ins_raw %>% distinct(CLM_FREQ)
+
+df_ins_raw %>% distinct(REVOKED)
+
+df_ins_raw %>% distinct(URBANICITY)
+
+```
+
+
+
+
+### Convert datatypes 
+
+```{r}
+
+# Set data types for variables
+df_ins_clean <- df_ins_raw %>% transform( 
+               TARGET_FLAG = as.factor(TARGET_FLAG), 
+               TARGET_AMT = as.numeric(TARGET_AMT),
+               KIDSDRIV = as.factor(KIDSDRIV),
+               AGE = as.numeric(AGE),
+               HOMEKIDS = as.factor(HOMEKIDS),
+               YOJ = as.numeric(YOJ),
+               INCOME = as.numeric(INCOME),
+               PARENT1 = as.factor(PARENT1),
+               HOME_VAL = as.numeric(HOME_VAL),
+               MSTATUS = as.factor(MSTATUS),
+               SEX = as.factor(SEX),
+               EDUCATION = as.factor(EDUCATION),
+               JOB = as.factor(JOB),
+               TRAVTIME = as.numeric(TRAVTIME),
+               CAR_USE = as.factor(CAR_USE),
+               BLUEBOOK = as.numeric(BLUEBOOK),
+               TIF = as.numeric(TIF), # factor or numeric?
+               CAR_TYPE = as.factor(CAR_TYPE),
+               RED_CAR = as.factor(RED_CAR),
+               OLDCLAIM = as.numeric(OLDCLAIM),
+               CLM_FREQ = as.ordered(CLM_FREQ),  # factor or numeric?
+               REVOKED = as.factor(REVOKED),
+               MVR_PTS = as.numeric(MVR_PTS),
+               CAR_AGE = as.numeric(CAR_AGE),
+               URBANICITY = as.factor(URBANICITY))
+
+# Confirm CLM_FREQ is an ordered factor
+is.ordered(df_ins_clean$CLM_FREQ)
+
+```
+
+
+
+### Review NAs
+
+```{r}
+
+# NA counts for each column
+colSums(is.na(df_ins_clean))
+
+# Visualize NA counts for each column
+df_ins_clean  %>%
+  summarise_all(list(~is.na(.)))%>%
+  pivot_longer(everything(),
+               names_to = "variables", values_to="missing") %>%
+  count(variables, missing) %>%
+  ggplot(aes(y=variables,x=n,fill=missing))+
+  geom_col()
+
+```
+
+
+
+### Data imputation
+
+```{r}
+
+# Impute data by regression: 
+df_ins_imp <- mice(df_ins_clean, method = "norm.predict", m = 1, remove.collinear=FALSE)
+df_ins_imp <- complete(df_ins_imp)
+
+# Confirm no NAs remain
+colSums(is.na(df_ins_imp))
+
+```
+
+
+
+## DATA EXPLORATION
+
+### Summary statistics
+
+```{r}
+
+describe(df_ins_imp)
+
+```
+
+
+
+### Distributions of variables
+
+```{r}
+
+# Histograms
+df_ins_imp %>%
+  keep(is.numeric) %>% 
+  gather() %>%
+  ggplot(aes(value)) +
+    facet_wrap(~ key, scales = "free") +
+    geom_density(fill = "steelblue", alpha=0.9, color="steelblue") +
+    geom_histogram(aes(y=..density..), alpha=0.5, fill = "lightblue", color="lightblue", position="identity")
+
+# Boxplots
+df_ins_imp %>%
+  keep(is.numeric) %>% 
+  gather() %>%
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_boxplot(fill = "steelblue", color="black", outlier.colour="red", outlier.shape=16,
+             outlier.size=2, notch=FALSE)
+
+```
+
+
+
+### Distributions of log-transformed variables
+
+```{r, warning=FALSE}
+
+# Log transformation
+df_ins_imp_log <- df_ins_imp %>% keep(is.numeric)
+df_ins_imp_log <- log(df_ins_imp_log + 1)
+
+# Histograms of log transformed numeric variables
+df_ins_imp_log %>%
+  gather(variable, value, TARGET_AMT:CAR_AGE) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+
+# Test for normality
+shapiro.test(df_ins_imp_log$AGE[0:5000])
+
+# Visual inspection of one variable (age) for normality
+qqnorm(df_ins_imp_log$AGE, pch = 1, frame = FALSE)
+qqline(df_ins_imp_log$AGE, col = "steelblue", lwd = 2)
+
+```
+
+
+
+### Distributions of square root-transformed variables
+
+```{r, warning=FALSE}
+
+# Square root transformation
+df_ins_imp_sqrt <- sqrt(df_ins_imp %>% keep(is.numeric))
+
+# Histograms of square root transformed numeric variables
+df_ins_imp_sqrt %>%
+  gather(variable, value, TARGET_AMT:CAR_AGE) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+
+# Test for normality
+shapiro.test(df_ins_imp_sqrt$AGE[0:5000])
+
+# Visual inspection of one variable (age) for normality
+qqnorm(df_ins_imp_sqrt$AGE, pch = 1, frame = FALSE)
+qqline(df_ins_imp_sqrt$AGE, col = "steelblue", lwd = 2)
+
+```
+
+
+
+### Distributions of cube root-transformed variables
+
+```{r, warning=FALSE}
+
+# Cube root transformation
+df_ins_imp_cube <- (df_ins_imp %>% keep(is.numeric))^(1/3)
+
+# Histograms of cube root transformed numeric variables
+df_ins_imp_cube %>%
+  gather(variable, value, TARGET_AMT:CAR_AGE) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+
+# Test for normality
+shapiro.test(df_ins_imp_cube$AGE[0:5000])
+
+# Visual inspection of one variable (age) for normality
+qqnorm(df_ins_imp_cube$AGE, pch = 1, frame = FALSE)
+qqline(df_ins_imp_cube$AGE, col = "steelblue", lwd = 2)
+
+```
+
+
+
+### Create new columns with transformed variables
+
+```{r, warning=FALSE}
+
+df_ins <- df_ins_imp %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(log = ~ log(. + 1))))
+
+df_ins <- df_ins %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(sqrt = sqrt)))
+
+df_ins <- df_ins %>%
+                  mutate(across(c(TARGET_AMT, AGE, YOJ, INCOME, HOME_VAL, TRAVTIME, BLUEBOOK, 
+                                  TIF, OLDCLAIM, MVR_PTS, CAR_AGE), .fns = list(cbrt = ~ .^(1/3))))
+
+glimpse(df_ins)
+
+```
+
+
+
+### Create new variables
+
+```{r}
+
+df_ins$HV_INC_RATIO <- df_ins$HOME_VAL / df_ins$INCOME
+
+df_ins$TRT_MVR_PRODUCT <- df_ins$TRAVTIME * df_ins$MVR_PTS
+
+df_ins$HV_INC_RATIO[is.nan(df_ins$HV_INC_RATIO)] <- 0
+df_ins$HV_INC_RATIO[is.infinite(df_ins$HV_INC_RATIO)] <- 0
+
+```
+
+
+### Data imputation again
+
+```{r}
+
+# Impute data by regression: 
+df_ins <- mice(df_ins, method = "norm.predict", m = 1, remove.collinear=FALSE)
+df_ins <- complete(df_ins)
+
+# Confirm no NAs remain
+colSums(is.na(df_ins))
+
+```
+
+
+
+### Correlation of variables
+
+```{r}
+
+# Visualize correlation between variables
+corrplot(cor(df_ins_imp %>% keep(is.numeric)), method="shade", shade.col=NA, tl.col="black", tl.srt=45)
+
+# Reshape correlation results
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+    )
+}
+
+# Closer look at correlations of variables
+corr_results <- rcorr(as.matrix(df_ins_imp %>% keep(is.numeric)))
+df_corr <- flattenCorrMatrix(corr_results$r, corr_results$P)
+
+# Noteworthy positive correlations
+df_corr %>% filter(cor > 0.4)
+
+# Noteworthy negative correlations
+df_corr %>% filter(cor < -0.4)
+
+# Pair plot
+pairs(df_ins_imp %>% keep(is.numeric), lower.panel = NULL, col = "steelblue")
+
+```
+
+
+### Check for multicollinearity
+
+```{r}
+
+model <- glm(TARGET_AMT ~ KIDSDRIV + AGE + YOJ + INCOME + HOME_VAL + TRAVTIME + BLUEBOOK +
+            TIF + OLDCLAIM + MVR_PTS + CAR_AGE, data = df_ins, family = "quasipoisson")
+
+vif(model)
+
+```
+
+
+### Bucket select variables (by quantiles)
+
+```{r}
+
+# 0-.25, .25-.75, .75-1
+df_ins$CAR_AGE_fact <- cut(x = df_ins$CAR_AGE, breaks = c(-4, 3.5, 12, 28), labels = c("New", "Moderate", "Old"))
+
+# -.5, .5-.9, .9+
+df_ins$HOME_VAL_fact <- cut(x = df_ins$HOME_VAL, breaks = c(-86567, 160953, 314151, 885283), labels = c("No or Low", "Moderate", "High"))
+
+# 0-.25, .25-.75, .75-1
+df_ins$INCOME_fact <- cut(x = df_ins$INCOME, breaks = c(-31969, 27940, 85472, 367031), labels = c("Low", "Moderate", "High"))
+
+# 0-.5, .50-.75, .75-1
+df_ins$MVR_PTS_fact <- cut(x = df_ins$MVR_PTS, breaks = c(-1, 1, 3, 14), labels = c("Low", "Moderate", "High"))
+
+# 0-.75, .75-1
+df_ins$OLDCLAIM_fact <- cut(x = df_ins$OLDCLAIM, breaks = c(-1, 4636, 57038), labels = c("Low", "High"))
+
+# 0-.25, .25-.75, .75-1
+df_ins$TIF_fact <- cut(x = df_ins$TIF, breaks = c(-1, 1, 7, 26), labels = c("Low", "Moderate", "High"))
+
+# 0-.25, .25-.75, .75-1
+df_ins$TRAVTIME_fact <- cut(x = df_ins$TRAVTIME, breaks = c(4, 22, 44, 143), labels = c("Short", "Moderate", "Long"))
+
+# 0-.25, .25-.75, .75-1
+df_ins$YOJ_fact <- cut(x = df_ins$YOJ, breaks = c(-1, 9, 13, 24), labels = c("Low", "Moderate", "High"))
+
+```
+
+### Binary Logistic Regression
+
+#### Binomial NULL Model
+
+```{r}
+# Remove the Target Columns and create new data frame
+
+data_train <- df_ins %>% dplyr::select(-starts_with("TARGET"))
+data_train$TARGET_FLAG <- df_ins$TARGET_FLAG
+```
+
+```{r}
+# Show new data frame
+head(data_train)
+```
+
+Build a Binary Logistic Regression Null model utilizing all the variables and data
+
+```{r}
+# Build the binomial null regression
+model1 <- glm(TARGET_FLAG ~ 1, data = data_train, family = binomial(link ="logit"))
+summary(model1)
+```
+
+#### Binomial FULL Model
+
+Binary Logistic Regression Full model utilizing all the variables and data, This model will be considered to be valid..
+
+```{r, warning=FALSE}
+#  Binomial FULL Model
+model2 <- glm(TARGET_FLAG ~ ., data = data_train, family = binomial(link ="logit"))
+summary(model2)
+
+plot(model2)
+
+```
+
+we notice how some variables are not statistically significant; for study purposes, I will assume that this is a valid model.
+
+```{r}
+# Generate confidence intervals for regression slope
+confint.default(model2)
+```
+
+
+```{r}
+# Generate the odds ratios
+exp(coef(model2))
+```
+
+```{r}
+# Generate confidence intervals for regression slope
+confint.default(model2)
+```
+
+
+```{r}
+# Generate the odds ratios
+exp(coef(model2))
+```
+
+
+I will select the variables using the stepwise method
+
+The ‘stepAIC’ function in R performs a stepwise model selection with an objective to minimize the AIC value.
+
+**Using Step in both direction**
+
+create multiple models using the STEP function from R.
+
+```{r include=FALSE}
+step_b <- step(model1, scope = list(upper=model2),direction="both")
+```
+
+Let's check an ANOVA table based on the above testing results.
+
+```{r}
+step_b$anova
+```
+
+From the above results, it shows  that the best model is as follows:
+
+```{r}
+summary(step_b)
+```
+
+
+We see how all the predictors are statistical significant, also, noticing how  the HOME_VAL and the INCOME are not as statistical significant compared to other variables.
+
+
+The below plot shows our fitted models vs Density.
+```{r}
+hist(step_b$fitted.values, main = " Histogram ",xlab = "Fitted models", col = 'skyblue3')
+```
+
+Show the predicted values
+```{r}
+data_train$Predict <- ifelse(step_b$fitted.values >0.5,"pos","neg")
+head(data_train$Predict)
+```
+
+
+**Confusion Matrix**
+
+Building a confusion matrix to get more insights.
+
+```{r}
+
+step_c <- data_train
+step_c$Predict = predict(step_b,type="response")
+step_c$TARGET_FLAG_Predict <- round(step_c$Predict)
+
+```
+
+```{r}
+
+cMatrix <- confusionMatrix(data = as.factor(step_c$TARGET_FLAG_Predict),
+                           reference = as.factor(step_c$TARGET_FLAG),
+                           positive = '1')
+cMatrix
+
+```
+
+We can see the accuracy is 0.7981 
+
+```{r}
+data.frame(Value = cMatrix$byClass)
+```
+
+**Binary STEP MODIFIED Model**
+
+For the following variables I will add 1 and calculate the log, to avoid errors since some entries reported 0 and log(0) will produce errors, also I will remove the variable HOMEKIDS and KIDSDRIV
+
+- Log(1 + INCOME) - Log(1 + HOME_VAL) - Log(1 + BLUEBOOK) - Log(1 + OLDCLAIM) - HOMEKIDS Remove - KIDSDRIV Remove
+
+```{r}
+
+step_modified <- glm(formula = TARGET_FLAG ~ KIDSDRIV +AGE+HOMEKIDS+YOJ+log(1 + INCOME)+PARENT1+ log(1+HOME_VAL) + MSTATUS+SEX+EDUCATION+JOB+TRAVTIME+CAR_USE+ log(1+BLUEBOOK) + TIF + CAR_TYPE + RED_CAR + log(1 + OLDCLAIM)+CLM_FREQ+REVOKED+URBANICITY+CAR_AGE, family = binomial(link = "logit"), data = data_train)
+
+```
+
+Let's see the summary:
+
+```{r}
+summary(step_modified)
+```
+
+With the transformation it looks slightly better the AIC is lower than the automatically selected model by the STEP procedure.
+    
+**Plot of standardized residuals**
+
+The below plot shows our fitted models vs the deviance standardized residuals.
+
+```{r}
+
+plot(fitted(step_modified),
+     rstandard(step_modified),
+     main = 'Standarize residuals',
+     xlab = 'Fitted values',
+     ylab = ' Residuals',
+     col = 'blue')
+
+```
+
+**Confusion Matrix**
+
+Let's check teh confusion matrix.
+
+```{r}
+
+
+step_modified_b <- step_modified
+step_modified_b$Predict = predict(step_modified,type="response")
+step_modified_b$TARGET_FLAG_Predict <- round(step_modified_b$Predict)
+
+```
+
+```{r}
+
+cMatrix <- confusionMatrix(data = as.factor(step_modified_b$TARGET_FLAG_Predict),
+                           reference = as.factor(step_modified_b$TARGET_FLAG),
+                           positive = '1')
+cMatrix
+
+```
+
+Is interesting to note that the reported Accuracy is 1
+
+From the above results, we obtain as follows:
+
+```{r}
+data.frame(Value = cMatrix$byClass)
+```
+
+
+### References
+
+http://www.sthda.com/english/wiki/correlation-matrix-a-quick-start-guide-to-analyze-format-and-visualize-a-correlation-matrix-using-r-software
+

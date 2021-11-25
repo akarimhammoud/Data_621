@@ -1,0 +1,220 @@
+---
+title: "DATA 621 Final Project"
+author: "Group 2"
+---
+
+### Overview
+There are millions of stray pets around the world, some of which are fortunate enough to be adopted while many others are not.  While adoption of a pet is often the definition of success, the rate at which a pet is adopted is also a key success factor - pets that take a long time to adopt contribute to over-crowded animal shelters and can prevent taking on new strays.  Sadly, pets that are not adopted eventually need to be euthanized.
+
+### Learn more about the data
+[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
+
+### What to Predict
+Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
+
+The values are determined in the following way:
+0 - Pet was adopted on the same day as it was listed.
+1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
+2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
+3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+4 - No adoption after 100 days of being listed.
+
+### This notebook...
+inputs the transformation training data and creates several models using RandomForest and XGBoost 
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(randomForest)
+require(xgboost)
+library(Matrix)
+library(caret)
+require(caTools)
+```
+
+### Load Data
+Load the data
+```{r echo=FALSE}
+# load data
+data <- read.csv('./data/TrainingData/train_cleaned.csv')
+head(data,2)
+```
+
+```{r}
+data <- transform(
+  data,
+  Type=as.factor(Type),
+  #Breed1=as.factor(Breed1),
+  Gender=as.factor(Gender),
+  Color1=as.factor(Color1),
+  Color2=as.factor(Color2),
+  Color3=as.factor(Color3),
+  MaturitySize=as.factor(MaturitySize),
+  FurLength=as.factor(FurLength),
+  Vaccinated = as.factor(Vaccinated),
+  Dewormed = as.factor(Dewormed),
+  Sterilized = as.factor(Sterilized),
+  Health = as.factor(Health),
+  AdoptionSpeed = as.factor(AdoptionSpeed),
+  NumColors = as.factor(NumColors)
+)
+```
+
+### Functions
+#### Function to create train and test
+```{r}
+#Create train data
+create_train_data  <- function(data) {
+  
+  sample = sample.split(data$AdoptionSpeed, SplitRatio = .75)
+  train = subset(data, sample == TRUE)
+  
+  return(train)
+}
+
+#Create test data
+create_test_data  <- function(data) {
+  
+  sample = sample.split(data$AdoptionSpeed, SplitRatio = .75)
+  test  = subset(data, sample == FALSE)
+  
+  return(test)
+}
+```
+
+#### Function to create RF confusion matrix
+```{r}
+create_rf_confusion_matrix <- function(pred, test){
+  
+  #Creates vectors having data points
+  AdoptionSpeed_test = as.numeric(unlist(test$AdoptionSpeed))
+  expected_value <- factor(c(AdoptionSpeed_test))
+  
+  predicted_value <- factor(c(pred))
+ 
+  #Creating confusion matrix
+  rf_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expected_value, positive='1')
+ 
+  #Results 
+  return(rf_confusion_matrix)
+}
+```
+
+#### Function to create RF Model
+```{r}
+rf_model_func <- function(data) {
+  #train, test data for RF model 1
+  rf_train = create_train_data(data)
+  rf_test = create_test_data(data)
+  
+  #create RF model 1
+  rf <- randomForest(
+    AdoptionSpeed ~ .,
+    data=rf_train
+  )
+    
+  #Predict AdoptionSpeed with RF model 1
+  rf_pred = predict(rf, newdata=rf_test)
+  
+  #Create a confusion matrix for RF model 1
+  rf_confusion_matrix = create_rf_confusion_matrix(rf_pred, rf_test)
+  return(rf_confusion_matrix)
+}
+```
+
+#### Function to create XG Boost model
+```{r}
+xg_model_func <- function(data) {
+  #train, test data for XG model 1
+  xg_train = as.matrix(create_train_data(xg_model1_data))
+  xg_test = as.matrix(create_test_data(xg_model1_data))
+  
+  #separate out the label
+  adoption_speed_train = xg_train[ , ncol(xg_train)]
+  adoption_speed_test = xg_test[ , ncol(xg_test)]
+  
+  #drop AdoptionSpeed from train and test
+  xg_train = subset(xg_train, select=-c(ncol(xg_train)))
+  xg_test = subset(xg_test, select=-c(ncol(xg_test)))
+  
+  #XGBoost requires a dgc matrix
+  xg_train=as(xg_train, "dgCMatrix")
+  xg_test=as(xg_test, "dgCMatrix")
+  
+  #Create the model
+  xg <- xgboost(data = xg_train, label = adoption_speed_train, nrounds = 300, verbose=0)
+  
+  #Predict
+  xg_pred <- predict(xg, xg_test)
+  
+  #Create a confusion matrix for XG model 1
+  xg_pred = factor(as.integer(xg_pred))
+  adoption_speed_test = factor(as.integer(adoption_speed_test))
+  
+  xg_confusion_matrix = confusionMatrix(xg_pred, adoption_speed_test)
+  return(xg_confusion_matrix)
+}
+```
+
+### RandomForest (RF)
+Helpful article from [TowardsDataScience](https://towardsdatascience.com/random-forest-in-r-f66adf80ec9)
+
+#### RF Model #1
+```{r}
+#dataframe for RF model 1
+rf_model1_data = subset(data, select = c(Type,Breed1,FurLength,Gender,Sterilized,Quantity,AgeYears,Vaccinated,AdoptionSpeed))
+  
+rf_confusion_matrix = rf_model_func(rf_model1_data)
+rf_confusion_matrix
+```
+
+#### RF Model #2
+```{r}
+#dataframe for RF model 2
+rf_model2_data = subset(data, select = c(Type,AgeYears,AdoptionSpeed))
+  
+rf_confusion_matrix = rf_model_func(rf_model2_data)
+rf_confusion_matrix
+```
+
+#### RF Model #3
+```{r}
+#dataframe for RF model 3
+rf_model3_data = subset(data, select = c(Type,Breed1,FurLength,Gender,AgeYears,AdoptionSpeed))
+  
+rf_confusion_matrix = rf_model_func(rf_model3_data)
+rf_confusion_matrix
+```
+
+### XGBoost (XG)
+Helpful article from [Analytics Vidyha](https://www.analyticsvidhya.com/blog/2016/01/xgboost-algorithm-easy-steps/)
+#### XG Model #1
+```{r}
+#dataframe for XG model 1
+xg_model1_data = subset(data, select = c(Type,Breed1,FurLength,Gender,Sterilized,Quantity,AgeYears,Vaccinated,AdoptionSpeed))
+
+xg_confusion_matrix = xg_model_func(xg_model1_data)
+xg_confusion_matrix
+```
+
+#### XG Model #2
+```{r}
+#dataframe for XG model 2
+xg_model2_data = subset(data, select = c(Type,AgeYears,AdoptionSpeed))
+
+xg_confusion_matrix = xg_model_func(xg_model2_data)
+xg_confusion_matrix
+```
+
+#### XG Model #3
+```{r}
+#dataframe for XG model 3
+xg_model3_data = subset(data, select = c(Type,Breed1,FurLength,Gender,AgeYears,AdoptionSpeed))
+
+xg_confusion_matrix = xg_model_func(xg_model3_data)
+xg_confusion_matrix
+```
