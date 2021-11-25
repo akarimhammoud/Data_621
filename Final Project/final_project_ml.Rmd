@@ -33,14 +33,18 @@ library(randomForest)
 require(xgboost)
 library(Matrix)
 library(caret)
+library(here)
 require(caTools)
+
+#importing our functions
+source(here("functions","draw_confusion_matrix.R"), local = knitr::knit_global())
 ```
 
 ### Load Data
 Load the data
 ```{r echo=FALSE}
 # load data
-data <- read.csv('./data/TrainingData/train_cleaned.csv')
+data <- read.csv(here('data','TrainingData','train_cleaned.csv'))
 head(data,2)
 ```
 
