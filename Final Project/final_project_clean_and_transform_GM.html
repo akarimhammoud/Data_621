@@ -177,6 +177,32 @@ pre code {
 <div id="learn-more-about-the-data" class="section level3">
 <h3>Learn more about the data</h3>
 <p><a href="https://www.kaggle.com/c/petfinder-adoption-prediction/data">About the data</a></p>
+<ul>
+<li>PetID - Unique hash ID of pet profile</li>
+<li>AdoptionSpeed - <strong>response variable</strong> Categorical speed of adoption. Lower is faster.</li>
+<li>Type - Type of animal (1 = Dog, 2 = Cat)</li>
+<li>Name - Name of pet (Empty if not named)</li>
+<li>Age - Age of pet when listed, in months</li>
+<li>Breed1 - Primary breed of pet (Refer to BreedLabels dictionary)</li>
+<li>Breed2 - Secondary breed of pet, if pet is of mixed breed (Refer to BreedLabels dictionary)</li>
+<li>Gender - Gender of pet (1 = Male, 2 = Female, 3 = Mixed, if profile represents group of pets)</li>
+<li>Color1 - Color 1 of pet (Refer to ColorLabels dictionary)</li>
+<li>Color2 - Color 2 of pet (Refer to ColorLabels dictionary)</li>
+<li>Color3 - Color 3 of pet (Refer to ColorLabels dictionary)</li>
+<li>MaturitySize - Size at maturity (1 = Small, 2 = Medium, 3 = Large, 4 = Extra Large, 0 = Not Specified)</li>
+<li>FurLength - Fur length (1 = Short, 2 = Medium, 3 = Long, 0 = Not Specified)</li>
+<li>Vaccinated - Pet has been vaccinated (1 = Yes, 2 = No, 3 = Not Sure)</li>
+<li>Dewormed - Pet has been dewormed (1 = Yes, 2 = No, 3 = Not Sure)</li>
+<li>Sterilized - Pet has been spayed / neutered (1 = Yes, 2 = No, 3 = Not Sure)</li>
+<li>Health - Health Condition (1 = Healthy, 2 = Minor Injury, 3 = Serious Injury, 0 = Not Specified)</li>
+<li>Quantity - Number of pets represented in profile</li>
+<li>Fee - Adoption fee (0 = Free)</li>
+<li>State - State location in Malaysia (Refer to StateLabels dictionary)</li>
+<li>RescuerID - Unique hash ID of rescuer</li>
+<li>VideoAmt - Total uploaded videos for this pet</li>
+<li>PhotoAmt - Total uploaded photos for this pet</li>
+<li>Description - Profile write-up for this pet. The primary language used is English, with some in Malay or Chinese.</li>
+</ul>
 </div>
 <div id="what-to-predict" class="section level3">
 <h3>What to Predict</h3>
@@ -194,7 +220,8 @@ library(reshape)
 library(ggplot2)
 library(purrr)
 library(psych)
-library(tidyr)</code></pre>
+library(tidyr)
+library(corrplot)</code></pre>
 </div>
 <div id="load-data" class="section level3">
 <h3>Load Data</h3>
@@ -211,9 +238,9 @@ library(tidyr)</code></pre>
 ##                                                                                                                                                                                                                             Description
 ## 1                                              Milo went missing after a week with her new adoptive family. Only 3 months old, light brown coat. Missing from Jalan Kiara, Bandar Botanic, Klang. Please call Su at if you&#39;ve seen her.
 ## 2 She&#39;s only 4 months old, very friendly and loving. Loves attention. A little naughty sometimes. But she&#39;s adorable. I adopted her from MDDB, but recently I have just moved to a condo. Im finding a perfect and loving home for her.
-##       PetID PhotoAmt AdoptionSpeed
-## 1 375905770        3             3
-## 2 da8d4a273        5             4</code></pre>
+##       PetID PhotoAmt AdoptionSpeed breedname
+## 1 375905770        3             3      &lt;NA&gt;
+## 2 da8d4a273        5             4      &lt;NA&gt;</code></pre>
 </div>
 <div id="missing-values-count" class="section level3">
 <h3>Missing Values Count</h3>
@@ -223,13 +250,13 @@ library(tidyr)</code></pre>
 ## [1,] 0    0    0   0      0      0      0      0      0      0           
 ##      FurLength Vaccinated Dewormed Sterilized Health Quantity Fee State
 ## [1,] 0         0          0        0          0      0        0   0    
-##      RescuerID VideoAmt Description PetID PhotoAmt AdoptionSpeed
-## [1,] 0         0        0           0     0        0</code></pre>
+##      RescuerID VideoAmt Description PetID PhotoAmt AdoptionSpeed breedname
+## [1,] 0         0        0           0     0        0             5</code></pre>
 </div>
 <div id="show-the-type-of-each-data" class="section level3">
 <h3>Show the type of each data</h3>
 <pre class="r"><code>str(data)</code></pre>
-<pre><code>## &#39;data.frame&#39;:    14993 obs. of  24 variables:
+<pre><code>## &#39;data.frame&#39;:    14993 obs. of  25 variables:
 ##  $ Type         : int  1 1 2 1 1 1 1 1 1 1 ...
 ##  $ Name         : chr  &quot;Lil Milo&quot; &quot;Bella 4 Months Puppy!&quot; &quot;&quot; &quot;\&quot;Boy Boy\&quot;&quot; ...
 ##  $ Age          : int  2 4 3 72 2 5 24 3 0 24 ...
@@ -253,7 +280,8 @@ library(tidyr)</code></pre>
 ##  $ Description  : chr  &quot;Milo went missing after a week with her new adoptive family. Only 3 months old, light brown coat. Missing from &quot;| __truncated__ &quot;She&#39;s only 4 months old, very friendly and loving. Loves attention. A little naughty sometimes. But she&#39;s adora&quot;| __truncated__ &quot;Mama cat came to house and gave birth to these 03 lovely kittens, please adopt them and give them a home sweet home.&quot; &quot;He is a stray dog found wandering around University Putra Malaysia (UPM), Serdang main campus. I have been told&quot;| __truncated__ ...
 ##  $ PetID        : chr  &quot;375905770&quot; &quot;da8d4a273&quot; &quot;27e74e45c&quot; &quot;7b5bee232&quot; ...
 ##  $ PhotoAmt     : int  3 5 11 5 0 2 5 3 2 2 ...
-##  $ AdoptionSpeed: int  3 4 2 4 3 4 4 4 1 4 ...</code></pre>
+##  $ AdoptionSpeed: int  3 4 2 4 3 4 4 4 1 4 ...
+##  $ breedname    : chr  NA NA NA NA ...</code></pre>
 </div>
 <div id="new-features" class="section level3">
 <h3>New features</h3>
@@ -291,8 +319,10 @@ data$NumColors = num_colors_vec</code></pre>
 ##     &quot;integer&quot;     &quot;integer&quot;     &quot;integer&quot;     &quot;integer&quot;     &quot;integer&quot; 
 ##    Sterilized        Health      Quantity           Fee      VideoAmt 
 ##     &quot;integer&quot;     &quot;integer&quot;     &quot;integer&quot;     &quot;integer&quot;     &quot;integer&quot; 
-##      PhotoAmt AdoptionSpeed      AgeYears     NumColors       AllMeds 
-##     &quot;integer&quot;     &quot;integer&quot;     &quot;numeric&quot;     &quot;numeric&quot;     &quot;integer&quot;</code></pre>
+##      PhotoAmt AdoptionSpeed     breedname      AgeYears     NumColors 
+##     &quot;integer&quot;     &quot;integer&quot;   &quot;character&quot;     &quot;numeric&quot;     &quot;numeric&quot; 
+##       AllMeds 
+##     &quot;integer&quot;</code></pre>
 <p>#Change categorical variables from integer to factors</p>
 <pre class="r"><code>data &lt;- transform(
   data,
@@ -311,30 +341,88 @@ data$NumColors = num_colors_vec</code></pre>
   AdoptionSpeed = as.factor(AdoptionSpeed),
   NumColors = as.factor(NumColors)
 )</code></pre>
-<pre class="r"><code>head(data)</code></pre>
-<pre><code>##   Type Breed1 Gender Color1 Color2 Color3 MaturitySize FurLength Vaccinated
-## 1    1      0      2      2      0      0            2         1          1
-## 2    1      0      2      2      3      0            2         1          1
-## 3    2      0      3      1      4      7            1         1          2
-## 4    1      0      1      1      2      0            2         2          2
-## 5    1      0      2      2      5      7            1         1          2
-## 6    1      1      2      1      4      7            2         1          2
-##   Dewormed Sterilized Health Quantity Fee VideoAmt PhotoAmt AdoptionSpeed
-## 1        1          2      1        1   0        0        3             3
-## 2        1          2      1        1 100        0        5             4
-## 3        1          2      1        3   0        0       11             2
-## 4        2          2      1        1   0        0        5             4
-## 5        2          2      1        1   1        0        0             3
-## 6        2          2      1        2   0        0        2             4
-##   AgeYears NumColors AllMeds
-## 1        0         1       4
-## 2        0         2       4
-## 3        0         3       5
-## 4        6         2       6
-## 5        0         3       6
-## 6        0         3       6</code></pre>
+<pre class="r"><code>str(data)</code></pre>
+<pre><code>## &#39;data.frame&#39;:    14993 obs. of  21 variables:
+##  $ Type         : Factor w/ 2 levels &quot;1&quot;,&quot;2&quot;: 1 1 2 1 1 1 1 1 1 1 ...
+##  $ Breed1       : Factor w/ 176 levels &quot;0&quot;,&quot;1&quot;,&quot;3&quot;,&quot;5&quot;,..: 1 1 1 1 1 2 2 3 4 4 ...
+##  $ Gender       : Factor w/ 3 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;: 2 2 3 1 2 2 3 1 2 2 ...
+##  $ Color1       : Factor w/ 7 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;,&quot;4&quot;,..: 2 2 1 1 2 1 4 2 1 3 ...
+##  $ Color2       : Factor w/ 7 levels &quot;0&quot;,&quot;2&quot;,&quot;3&quot;,&quot;4&quot;,..: 1 3 4 2 5 4 1 1 2 5 ...
+##  $ Color3       : Factor w/ 6 levels &quot;0&quot;,&quot;3&quot;,&quot;4&quot;,&quot;5&quot;,..: 1 1 6 1 6 6 1 1 1 1 ...
+##  $ MaturitySize : Factor w/ 4 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;,&quot;4&quot;: 2 2 1 2 1 2 2 2 1 2 ...
+##  $ FurLength    : Factor w/ 3 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;: 1 1 1 2 1 1 1 2 1 2 ...
+##  $ Vaccinated   : Factor w/ 3 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;: 1 1 2 2 2 2 1 2 2 1 ...
+##  $ Dewormed     : Factor w/ 3 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;: 1 1 1 2 2 2 1 1 2 1 ...
+##  $ Sterilized   : Factor w/ 3 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;: 2 2 2 2 2 2 1 2 2 1 ...
+##  $ Health       : Factor w/ 3 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;: 1 1 1 1 1 1 1 1 2 1 ...
+##  $ Quantity     : int  1 1 3 1 1 2 2 4 1 1 ...
+##  $ Fee          : int  0 100 0 0 1 0 0 0 0 0 ...
+##  $ VideoAmt     : int  0 0 0 0 0 0 0 0 0 0 ...
+##  $ PhotoAmt     : int  3 5 11 5 0 2 5 3 2 2 ...
+##  $ AdoptionSpeed: Factor w/ 5 levels &quot;0&quot;,&quot;1&quot;,&quot;2&quot;,&quot;3&quot;,..: 4 5 3 5 4 5 5 5 2 5 ...
+##  $ breedname    : chr  NA NA NA NA ...
+##  $ AgeYears     : num  0 0 0 6 0 0 2 0 0 2 ...
+##  $ NumColors    : Factor w/ 3 levels &quot;1&quot;,&quot;2&quot;,&quot;3&quot;: 1 2 3 2 3 3 1 1 2 2 ...
+##  $ AllMeds      : int  4 4 5 6 6 6 3 5 6 3 ...</code></pre>
+<p>Import the color labels to see the names of the colors.</p>
+<pre class="r"><code>colors &lt;- read.csv(&#39;./data/color_labels.csv&#39;)
+
+glimpse(colors)</code></pre>
+<pre><code>## Rows: 7
+## Columns: 2
+## $ ColorID   &lt;int&gt; 1, 2, 3, 4, 5, 6, 7
+## $ ColorName &lt;chr&gt; &quot;Black&quot;, &quot;Brown&quot;, &quot;Golden&quot;, &quot;Yellow&quot;, &quot;Cream&quot;, &quot;Gray&quot;, &quot;Whit~</code></pre>
+<p>Checking the levels of <code>Color1</code>, <code>Color2</code>, and <code>Color3</code></p>
+<pre class="r"><code>levels(data$Color1)</code></pre>
+<pre><code>## [1] &quot;1&quot; &quot;2&quot; &quot;3&quot; &quot;4&quot; &quot;5&quot; &quot;6&quot; &quot;7&quot;</code></pre>
+<pre class="r"><code>levels(data$Color2)</code></pre>
+<pre><code>## [1] &quot;0&quot; &quot;2&quot; &quot;3&quot; &quot;4&quot; &quot;5&quot; &quot;6&quot; &quot;7&quot;</code></pre>
+<pre class="r"><code>levels(data$Color3)</code></pre>
+<pre><code>## [1] &quot;0&quot; &quot;3&quot; &quot;4&quot; &quot;5&quot; &quot;6&quot; &quot;7&quot;</code></pre>
+<p>Creating new variables to name the colors.</p>
+<pre class="r"><code>data$ColorName1 &lt;- recode_factor(data$Color1,&quot;1&quot;= &quot;Black&quot;, 
+                                &quot;2&quot;= &quot;Brown&quot;, 
+                                &quot;3&quot;= &quot;Golden&quot;, 
+                                &quot;4&quot;= &quot;Yellow&quot;, 
+                                &quot;5&quot;= &quot;Cream&quot;, 
+                                &quot;6&quot;= &quot;Gray&quot;, 
+                                &quot;7&quot;= &quot;White&quot;)</code></pre>
+<pre class="r"><code>data$ColorName2 &lt;- recode_factor(data$Color2, &quot;0&quot; = &quot;NA&quot;,
+                                &quot;2&quot;= &quot;Brown&quot;, 
+                                &quot;3&quot;= &quot;Golden&quot;, 
+                                &quot;4&quot;= &quot;Yellow&quot;, 
+                                &quot;5&quot;= &quot;Cream&quot;, 
+                                &quot;6&quot;= &quot;Gray&quot;, 
+                                &quot;7&quot;= &quot;White&quot;)</code></pre>
+<pre class="r"><code>data$ColorName3 &lt;- recode_factor(data$Color3, &quot;0&quot; = &quot;NA&quot;,
+                                &quot;3&quot;= &quot;Golden&quot;, 
+                                &quot;4&quot;= &quot;Yellow&quot;, 
+                                &quot;5&quot;= &quot;Cream&quot;, 
+                                &quot;6&quot;= &quot;Gray&quot;, 
+                                &quot;7&quot;= &quot;White&quot;)</code></pre>
+<p>Converting the <code>char</code> version of “NA” introduced in <code>ColorName</code>s 1-3 to type NA.</p>
+<pre class="r"><code>data[data==&quot;NA&quot;]&lt;-NA</code></pre>
+<p>Converting the <code>breedname</code> to a factor.</p>
+<pre class="r"><code>data$breedname &lt;- as.factor(data$breedname)</code></pre>
+<p>Lets check how many dogs and cats we have:</p>
+<pre class="r"><code>table(data$Type)</code></pre>
+<pre><code>## 
+##    1    2 
+## 8132 6861</code></pre>
+<p>It looks like we have 1262 more dogs than cats, with 8132 dogs and 6861 cats.</p>
+<p>Next we bring in the AKC Breed Info table to load details on dog sizes by breed.</p>
+<pre class="r"><code>breed_size &lt;- read.csv(&#39;./data/TrainingData/AKC Breed Info.csv&#39;)
+
+str(breed_size)</code></pre>
+<pre><code>## &#39;data.frame&#39;:    150 obs. of  5 variables:
+##  $ BreedName         : chr  &quot;Akita&quot; &quot;Anatolian Sheepdog&quot; &quot;Bernese Mountain Dog&quot; &quot;Bloodhound&quot; ...
+##  $ height_low_inches : chr  &quot;26&quot; &quot;27&quot; &quot;23&quot; &quot;24&quot; ...
+##  $ height_high_inches: chr  &quot;28&quot; &quot;29&quot; &quot;27&quot; &quot;26&quot; ...
+##  $ weight_low_lbs    : int  80 100 85 80 70 100 120 95 130 90 ...
+##  $ weight_high_lbs   : int  120 150 110 120 100 130 160 120 150 150 ...</code></pre>
+<p>Using the <code>breed_size</code> table, a feature can be created using the <a href="https://www.petplace.com/article/dogs/pet-care/american-kennel-club-akc-breeds-by-size/">American Kennel Club Breeds by Size</a> breakdown.</p>
 <p>###Output an updated csv</p>
-<pre class="r"><code>write.csv(data, &#39;./data/TrainingData/train_cleaned.csv&#39;,row.names = FALSE)
+<pre class="r"><code>#write.csv(data, &#39;./data/TrainingData/train_cleaned.csv&#39;,row.names = FALSE)
 #write.csv(data, &#39;./data/TestData/test_cleaned.csv&#39;,row.names = FALSE)</code></pre>
 </div>
 
