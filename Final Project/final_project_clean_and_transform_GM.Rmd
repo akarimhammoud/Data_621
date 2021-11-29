@@ -238,8 +238,12 @@ str(breed_size)
 
 Using the `breed_size` table, a feature can be created using the [American Kennel Club Breeds by Size](https://www.petplace.com/article/dogs/pet-care/american-kennel-club-akc-breeds-by-size/) breakdown.
 
+better weight ranges: https://citydogslife.com/small-medium-large-dog-size-guide/
 
+calculate the average based on the range? 
+then use that to see if the avg falls in a weight size for to classify
 
+[hypoallergenic](https://www.akc.org/dog-breeds/hypoallergenic-dogs/)
 
 
 ###Output an updated csv 
