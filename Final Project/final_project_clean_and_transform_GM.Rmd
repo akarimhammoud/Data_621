@@ -248,7 +248,6 @@ breed_size$height_low_inches <- as.integer(breed_size$height_low_inches)
 breed_size$height_high_inches <- as.integer(breed_size$height_high_inches)
 ```
 
-
 Using the `breed_size` table, a feature can be created using the [American Kennel Club Breeds by Size](https://www.petplace.com/article/dogs/pet-care/american-kennel-club-akc-breeds-by-size/) breakdown.
 
 Alternatively, here is another breed type [breakdown by size](https://citydogslife.com/small-medium-large-dog-size-guide/).
@@ -273,7 +272,21 @@ breed_size[68,1] ="American Cocker Spaniel"
 breed_size[69,1] ="English Cocker Spaniel"
 ```
 
-Next we subset our `data` by `Type` to focus on dogs *woof*.
+Create a feature for size based on breed using `case_when()`^[https://dplyr.tidyverse.org/reference/case_when.html].
+```{r}
+breed_size<- breed_size %>% 
+  mutate(
+    size = case_when(
+      (avg_weight >= 3 & avg_weight < 9) ~ "toy",
+      (avg_weight >= 9 & avg_weight < 35) ~ "small",
+      (avg_weight >= 35 & avg_weight < 65) ~ "medium",
+      (avg_weight >= 65 & avg_weight < 85) ~ "large",
+      (avg_weight >= 85) ~ "giant"
+    )
+  )
+```
+
+Subset `data` by `Type` to focus on dogs *woof*.
 
 ```{r}
 dog_data = filter(data, Type == 1)
