@@ -61,6 +61,7 @@ library(purrr)
 library(psych)
 library(tidyr)
 library(corrplot)
+library(forcats)
 ```
 
 ### Load Data
@@ -217,6 +218,8 @@ Converting the `char` version of "NA" introduced in `ColorName`s 1-3 to type NA.
 data[data=="NA"]<-NA
 ```
 
+### Breed Data
+
 Converting the `breedname` to a factor.
 ```{r}
 data$breedname <- as.factor(data$breedname)
@@ -236,15 +239,68 @@ breed_size <- read.csv('./data/TrainingData/AKC Breed Info.csv')
 str(breed_size)
 ```
 
+Remove one Fox Terrier of the two entries. Both entries have the same size data, only difference is hair type (smooth vs. wire).
+```{r}
+breed_size <- breed_size %>% 
+  slice(-116)
+
+breed_size$height_low_inches <- as.integer(breed_size$height_low_inches)
+breed_size$height_high_inches <- as.integer(breed_size$height_high_inches)
+```
+
+
 Using the `breed_size` table, a feature can be created using the [American Kennel Club Breeds by Size](https://www.petplace.com/article/dogs/pet-care/american-kennel-club-akc-breeds-by-size/) breakdown.
 
-better weight ranges: https://citydogslife.com/small-medium-large-dog-size-guide/
+Alternatively, here is another breed type [breakdown by size](https://citydogslife.com/small-medium-large-dog-size-guide/).
 
-calculate the average based on the range? 
-then use that to see if the avg falls in a weight size for to classify
+```{r}
+breed_size$avg_weight <- rowMeans(breed_size[,c('weight_low_lbs', 'weight_high_lbs')], na.rm=TRUE)
+```
+
+```{r}
+breed_size$BreedName <- recode(breed_size$BreedName, "Collie (Rough) & (Smooth)" = "Collie",
+                               "Fox Terrier ‰ÛÒ Wirehair" = "Fox Terrier")
+```
+
+```{r}
+#[row,column]
+cs <- sapply(breed_size[c(68,69),],mean)
+
+breed_size<-rbind(breed_size, cs)
+
+breed_size[150,1] = "Cocker Spaniel"
+breed_size[68,1] ="American Cocker Spaniel"
+breed_size[69,1] ="English Cocker Spaniel"
+```
+
+Next we subset our `data` by `Type` to focus on dogs *woof*.
+
+```{r}
+dog_data = filter(data, Type == 1)
+dog_data = subset(dog_data, select = -c(Type))
+```
+
+```{r}
+dog_data$breedname <- gsub("Amer ", "American ", dog_data$breedname) 
+```
+
+Next we will collapse duplicate Labrador Retriever factors (Black, Chocolate, and Yellow) into one as they are not considered to be separate [Retriever breeds](https://www.akc.org/expert-advice/dog-breeds/retriever-breeds/).
+
+```{r}
+dog_data$breedname <- fct_collapse(dog_data$breedname, 'Labrador Retriever' = c("Black Labrador Retriever","Chocolate Labrador Retriever","Yellow Labrador Retriever"))
+```
+
+Below are the top 10 breeds where Mixed Breed has a heavy majority with more than half of the dogs being categorized as a mix.
+
+```{r}
+table(dog_data$breedname) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Freq)) %>% 
+  top_n(10)
+  #subset(Freq!=0)
+```
 
 [hypoallergenic](https://www.akc.org/dog-breeds/hypoallergenic-dogs/)
-
 
 ###Output an updated csv 
 ```{r}
