@@ -218,7 +218,7 @@ Converting the `char` version of "NA" introduced in `ColorName`s 1-3 to type NA.
 data[data=="NA"]<-NA
 ```
 
-### Breed Data
+### Dog Breed Data
 
 Converting the `breedname` to a factor.
 ```{r}
@@ -231,6 +231,32 @@ table(data$Type)
 ```
 
 It looks like we have 1262 more dogs than cats, with 8132 dogs and 6861 cats.
+
+Subset `data` by `Type` to focus on dogs *woof*.
+```{r}
+dog_data = filter(data, Type == 1)
+dog_data = subset(dog_data, select = -c(Type))
+```
+
+```{r}
+dog_data$breedname <- gsub("Amer ", "American ", dog_data$breedname) 
+```
+
+Next we will collapse duplicate Labrador Retriever factors (Black, Chocolate, and Yellow) into one as they are not considered to be separate [Retriever breeds](https://www.akc.org/expert-advice/dog-breeds/retriever-breeds/).
+```{r}
+dog_data$breedname <- fct_collapse(dog_data$breedname, 'Labrador Retriever' = c("Black Labrador Retriever","Chocolate Labrador Retriever","Yellow Labrador Retriever"))
+```
+
+Below are the top 10 breeds where Mixed Breed has a heavy majority with more than half of the dogs being categorized as a mix.
+```{r}
+table(dog_data$breedname) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Freq)) %>% 
+  top_n(10)
+  #subset(Freq!=0)
+```
+
+_____
 
 Next we bring in the AKC Breed Info table to load details on dog sizes by breed.
 ```{r}
@@ -272,7 +298,7 @@ breed_size[68,1] ="American Cocker Spaniel"
 breed_size[69,1] ="English Cocker Spaniel"
 ```
 
-Create a feature for size based on breed using `case_when()`^[https://dplyr.tidyverse.org/reference/case_when.html].
+Create a `size` feature based on breed using `case_when()`^[https://dplyr.tidyverse.org/reference/case_when.html].
 ```{r}
 breed_size<- breed_size %>% 
   mutate(
@@ -286,34 +312,37 @@ breed_size<- breed_size %>%
   )
 ```
 
-Subset `data` by `Type` to focus on dogs *woof*.
+_____
+
+Below we create a dataframe using the list of [hypoallergenic](https://www.akc.org/dog-breeds/hypoallergenic-dogs/) dogs from the American Kennel Club. Once created, we `left_join()` it to our `dog_data` dataframe to add the new feature for analysis.
 
 ```{r}
-dog_data = filter(data, Type == 1)
-dog_data = subset(dog_data, select = -c(Type))
+breed <- c("Affenpinscher", "Afgan Hound", "American Hairless Terrier", 
+                    "Barbado da Terceira", "Bedlington Terrier", "Bichon Frise",
+                    "Bolongese", "Chinese Crested", "Coton de Tulear", 
+                    "Giant Schnauzer", "Irish Water Spaniel", "Kerry Blue Terrier",
+                    "Lagotto Romangnolo", "Lowchen", "Maltese","Miniature Shnauzer",
+                    "Peruvian Inca Orchid", "Poodle", "Standard Poodle", "Schnauzer",
+                    "Portuguese Water Dog", "Russian Tsvetnaya Bolonka", "Wheaten Terrier",
+                    "Xoloitzcuintli", "Yorkshire Terrier"
+                    )
+hypoallergenic <- as.data.frame(breed)
+hypoallergenic$hypoallergenic <- "Yes"
 ```
 
 ```{r}
-dog_data$breedname <- gsub("Amer ", "American ", dog_data$breedname) 
-```
+dog_data_merge <- left_join(dog_data, hypoallergenic, by=c("breedname" = "breed"))
 
-Next we will collapse duplicate Labrador Retriever factors (Black, Chocolate, and Yellow) into one as they are not considered to be separate [Retriever breeds](https://www.akc.org/expert-advice/dog-breeds/retriever-breeds/).
+dog_data_merge$hypoallergenic[is.na(dog_data_merge$hypoallergenic)] <- "No"
+
+#need to add NA back for Mixed Breed as some mixed breeds can be hypoallergenic 
+
+dog_data_merge$hypoallergenic <- as.factor(dog_data_merge$hypoallergenic)
+```
 
 ```{r}
-dog_data$breedname <- fct_collapse(dog_data$breedname, 'Labrador Retriever' = c("Black Labrador Retriever","Chocolate Labrador Retriever","Yellow Labrador Retriever"))
+str(dog_data_merge)
 ```
-
-Below are the top 10 breeds where Mixed Breed has a heavy majority with more than half of the dogs being categorized as a mix.
-
-```{r}
-table(dog_data$breedname) %>% 
-  as.data.frame() %>% 
-  arrange(desc(Freq)) %>% 
-  top_n(10)
-  #subset(Freq!=0)
-```
-
-[hypoallergenic](https://www.akc.org/dog-breeds/hypoallergenic-dogs/)
 
 ###Output an updated csv 
 ```{r}
