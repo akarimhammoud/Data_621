@@ -310,13 +310,18 @@ Since there are two types of Cocker Spaniels (American and English) in our `bree
 breed_size$height_low_inches <- as.integer(breed_size$height_low_inches)
 breed_size$height_high_inches <- as.integer(breed_size$height_high_inches)
 
+#cocker spaniel avg
 cs <- sapply(breed_size[c(68,69),],mean)
-
 breed_size<-rbind(breed_size, cs)
 
 breed_size[150,1] = "Cocker Spaniel"
 breed_size[68,1] ="American Cocker Spaniel"
 breed_size[69,1] ="English Cocker Spaniel"
+
+#poodle avg
+poodle <- sapply(breed_size[c(122,48,147),],mean)
+breed_size<-rbind(breed_size, poodle)
+breed_size[151,1] = "Poodle"
 ```
 
 #### Add feature
@@ -449,7 +454,8 @@ distributions %>%
   ggplot(aes(value)) +
   facet_wrap(~ key, scales = "free") +
   geom_boxplot(fill = "steelblue", color="black", outlier.colour="red", outlier.shape=16,
-             outlier.size=2, notch=FALSE)
+             outlier.size=2, notch=FALSE) +
+  theme_minimal()
 ```
 
 ```{r}
@@ -464,6 +470,8 @@ descr(distributions,
 
 
 ### Transformations of numeric variables
+
+Next we will take transformations of the variables reviewed above to see if the transformed variables are worth looking into and using for our model.
 
 #### Log Transformations
 ```{r}
@@ -505,8 +513,7 @@ cbrt_distributions %>%
   theme_minimal()
 ```
 
-
-
+Based on the above, all variables are still heavily right skewed with the exception of `PhotoAmt` which made some improvement, but still not normally distributed. 
 
 ###Output an updated csv 
 ```{r}
