@@ -1,7 +1,7 @@
 ---
 title: "DATA621: Final Project"
 author: "Group 2: George Cruz Deschamps, Karim Hammoud, Maliat Islam, Gabriella Maritnez, Ken Popkin"
-date: "Date: `r Sys.Date()` Due:" 
+date: "Date: `r Sys.Date()` Due:2021-12-12" 
 output:
       html_document:
         toc: yes
@@ -234,11 +234,6 @@ data[data=="NA"]<-NA
 
 ## Dog Breed Data *woof*
 
-Converting the `breedname` to a factor.
-```{r}
-data$breedname <- as.factor(data$breedname)
-```
-
 Lets check how many dogs and cats we have:
 ```{r}
 table(data$Type)
@@ -277,6 +272,8 @@ table(dog_data$breedname) %>%
 ```
 
 ### Size Label by Breed
+
+When deciding to adopt a new pet a consideration many people have is the size of the dog for a number of reasons. Size plays an important role in a dog's strength and activity level which is a concern for a potential new owner, in addition to space in ones house or if they have a backyard or not. 
 
 Next we bring in the AKC Breed Info table to load details on dog sizes by breed.
 ```{r}
@@ -381,20 +378,20 @@ hypoallergenic$hypoallergenic <- "Yes"
 ```{r}
 dog_data_merge1 <- left_join(dog_data_merge, hypoallergenic, 
                              by=c("breedname" = "breed"))
-#when breedname = Mixed Breed & NA hypo = NA, all else should be "No" 
 
+#when breedname = Mixed Breed & NA hypo = NA, all else should be "No" 
 dog_data_merge1$hypoallergenic[is.na(dog_data_merge1$hypoallergenic)] <- "No"
 
 dog_data_merge1$hypoallergenic[which(dog_data_merge1$breedname == "Mixed Breed")] <- NA
 dog_data_merge1$hypoallergenic[which(is.na(dog_data_merge1$breedname))] <- NA
 
-
-  
 dog_data_merge1$hypoallergenic <- as.factor(dog_data_merge1$hypoallergenic)
 ```
+
 How many hypoallergenic and non-hypoallergenic do we have?
 ```{r}
 table(dog_data_merge1$hypoallergenic)
+sum(table(dog_data_merge1$hypoallergenic))
 ```
 
 Mixed Breeds and breeds that are NA in the `breedname` column will be NA for `hypoallergenic` as it logically can't be confirmed if they are hypoallergenic or not. In general, there are Mixed Breeds that can be considered hypoallergenic. For example, a dog that is part Poodle (hypoallergenic) and part cavalier King Charles Spaniel (non-hypoallergenic) can be considered hypoallergenic, the resulting pup would is often called Cavapoo or Cavoodle.
@@ -408,22 +405,56 @@ How many are Mixed Breed?
 table(dog_data_merge1$breedname=="Mixed Breed")
 ```
 
-## Stats and Distributions of Numeric Variables
+## Distributions of Numeric Variables
 
 Here we check our data with the added features of `size` and `hypoallergenic`.
 ```{r}
 str(dog_data_merge1)
 ```
 
+Converting the `breedname` and `AllMeds` variables to factor.
+```{r}
+dog_data_merge1$breedname <- as.factor(dog_data_merge1$breedname)
+
+dog_data_merge1$AllMeds <- as.factor(dog_data_merge1$AllMeds)
+```
+
+Here we are subsetting our numeric predictor variables to check their distributions.
 ```{r}
 #subset our 3 vars
 distributions <- dog_data_merge1 %>% 
   keep(is.numeric)
 ```
 
+Next we check if the variables contain any NA values.
+```{r}
+colSums(is.na(distributions))
+```
+
 
 ```{r}
-descr(distributions,
+#plot
+distributions %>% 
+  gather(variable, value, 1:5) %>%
+  ggplot(aes(value)) +
+    facet_wrap(~variable, scales = "free") +
+    geom_density(fill = "steelblue", alpha=0.9, color="steelblue") +
+    geom_histogram(aes(y=..density..), alpha=0.2, fill = "lightblue", color="lightblue", position="identity") +
+    theme_minimal()
+```
+```{r}
+#box plots
+distributions %>% 
+  gather() %>%
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_boxplot(fill = "steelblue", color="black", outlier.colour="red", outlier.shape=16,
+             outlier.size=2, notch=FALSE)
+```
+
+```{r}
+#stats
+descr(distributions, 
   headings = FALSE, #remove headings# 
   transpose = FALSE #TRUE allows for better display due to large amount of variables
   ) %>% 
@@ -432,16 +463,49 @@ descr(distributions,
 ```
 
 
+### Transformations of numeric variables
+
+#### Log Transformations
 ```{r}
-#plot
-distributions %>%  
-  gather(variable, value, 1:6) %>%
+log_distributions <- log(distributions + 1)
+
+# Histograms of log transformed numeric variables
+log_distributions %>%
+  gather(variable, value, 1:5) %>%
   ggplot(., aes(value)) + 
   geom_density(fill = "steelblue", color="steelblue") + 
   facet_wrap(~variable, scales ="free", ncol = 3) +
   labs(x = element_blank(), y = element_blank()) +
   theme_minimal()
 ```
+  
+#### Square Root transformations
+```{r}
+sqrt_distributions <- sqrt(distributions)
+
+sqrt_distributions %>% 
+  gather(variable, value, 1:5) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 3) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+  
+#### Cube root transformations
+```{r}
+cbrt_distributions <- (distributions)^(1/3)
+
+cbrt_distributions %>% 
+  gather(variable, value, 1:5) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 3) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+
+
 
 
 ###Output an updated csv 
