@@ -56,13 +56,13 @@ The values are determined in the following way:
 ## This Notebook...
 The data has no missing values, but there are a number of features in text that need to be converted to some numeric value. This notebook performs those changes.
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 library(dplyr)
 library(reshape)
 library(ggplot2)
@@ -71,6 +71,9 @@ library(psych)
 library(tidyr)
 library(corrplot)
 library(forcats)
+library(kableExtra)
+library(summarytools)
+library(stats)
 ```
 
 ### Load Data
@@ -319,6 +322,8 @@ breed_size[68,1] ="American Cocker Spaniel"
 breed_size[69,1] ="English Cocker Spaniel"
 ```
 
+#### Add feature
+
 Create a `size` feature based on breed using `case_when()`^[https://dplyr.tidyverse.org/reference/case_when.html].
 ```{r}
 breed_size<- breed_size %>% 
@@ -352,7 +357,7 @@ What is a hypoallergenic dog?
 
 According to the American College of Allergy, Asthma, and Immunology, as much as 10% of the U.S. population is allergic to dogs. While there are no 100% hypoallergenic dogs, there are many breeds that do well with allergy sufferers. Dander, which is attached to pet hair, is what causes most pet allergies in humans and these dogs have a non-shedding coat that produces less dander.  
 
-So if you are either part of the 10% of the U.s. population that is allergic to dogs or just don't like to have to vacuum dog hair twice a day then a hypoallergenic dog will be more appealing to you.
+So if you are either part of the 10% of the U.s. population that is allergic to dogs or just don't like to have to vacuum dog hair twice a day then a hypoallergenic dog will be more appealing to you than a non-hypoallergenic dog.
 
 #### Add feature
 
@@ -391,6 +396,9 @@ How many hypoallergenic and non-hypoallergenic do we have?
 ```{r}
 table(dog_data_merge1$hypoallergenic)
 ```
+
+Mixed Breeds and breeds that are NA in the `breedname` column will be NA for `hypoallergenic` as it logically can't be confirmed if they are hypoallergenic or not. In general, there are Mixed Breeds that can be considered hypoallergenic. For example, a dog that is part Poodle (hypoallergenic) and part cavalier King Charles Spaniel (non-hypoallergenic) can be considered hypoallergenic, the resulting pup would is often called Cavapoo or Cavoodle.
+
 How many NA breed do we have?
 ```{r}
 table(is.na(dog_data_merge1$breedname))
@@ -400,7 +408,7 @@ How many are Mixed Breed?
 table(dog_data_merge1$breedname=="Mixed Breed")
 ```
 
-## Distributions of Numeric Variables
+## Stats and Distributions of Numeric Variables
 
 Here we check our data with the added features of `size` and `hypoallergenic`.
 ```{r}
@@ -411,7 +419,20 @@ str(dog_data_merge1)
 #subset our 3 vars
 distributions <- dog_data_merge1 %>% 
   keep(is.numeric)
+```
 
+
+```{r}
+descr(distributions,
+  headings = FALSE, #remove headings# 
+  transpose = FALSE #TRUE allows for better display due to large amount of variables
+  ) %>% 
+  kbl(caption = "Univariate Descriptive Statistics - Training Data Set") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+
+```{r}
 #plot
 distributions %>%  
   gather(variable, value, 1:6) %>%
