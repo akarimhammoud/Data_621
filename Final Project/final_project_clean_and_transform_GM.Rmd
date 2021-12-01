@@ -348,6 +348,14 @@ table(dog_data_merge$size) %>%
 
 ### Hypoallergenic
 
+What is a hypoallergenic dog?  
+
+According to the American College of Allergy, Asthma, and Immunology, as much as 10% of the U.S. population is allergic to dogs. While there are no 100% hypoallergenic dogs, there are many breeds that do well with allergy sufferers. Dander, which is attached to pet hair, is what causes most pet allergies in humans and these dogs have a non-shedding coat that produces less dander.  
+
+So if you are either part of the 10% of the U.s. population that is allergic to dogs or just don't like to have to vacuum dog hair twice a day then a hypoallergenic dog will be more appealing to you.
+
+#### Add feature
+
 Below we create a dataframe using the list of [hypoallergenic](https://www.akc.org/dog-breeds/hypoallergenic-dogs/) dogs from the American Kennel Club. Once created, we `left_join()` it to our `dog_data_merge` dataframe to add the new feature for analysis.
 
 ```{r}
@@ -368,15 +376,52 @@ hypoallergenic$hypoallergenic <- "Yes"
 ```{r}
 dog_data_merge1 <- left_join(dog_data_merge, hypoallergenic, 
                              by=c("breedname" = "breed"))
-
 #when breedname = Mixed Breed & NA hypo = NA, all else should be "No" 
+
+dog_data_merge1$hypoallergenic[is.na(dog_data_merge1$hypoallergenic)] <- "No"
+
+dog_data_merge1$hypoallergenic[which(dog_data_merge1$breedname == "Mixed Breed")] <- NA
+dog_data_merge1$hypoallergenic[which(is.na(dog_data_merge1$breedname))] <- NA
+
+
   
 dog_data_merge1$hypoallergenic <- as.factor(dog_data_merge1$hypoallergenic)
 ```
-
+How many hypoallergenic and non-hypoallergenic do we have?
 ```{r}
 table(dog_data_merge1$hypoallergenic)
 ```
+How many NA breed do we have?
+```{r}
+table(is.na(dog_data_merge1$breedname))
+```
+How many are Mixed Breed?
+```{r}
+table(dog_data_merge1$breedname=="Mixed Breed")
+```
+
+## Distributions of Numeric Variables
+
+Here we check our data with the added features of `size` and `hypoallergenic`.
+```{r}
+str(dog_data_merge1)
+```
+
+```{r}
+#subset our 3 vars
+distributions <- dog_data_merge1 %>% 
+  keep(is.numeric)
+
+#plot
+distributions %>%  
+  gather(variable, value, 1:6) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 3) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+
 
 ###Output an updated csv 
 ```{r}
