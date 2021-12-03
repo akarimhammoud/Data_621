@@ -1,0 +1,536 @@
+---
+title: DS621 - Homework 3
+author:
+  - name: George Cruz Deschamps
+    email: georg4re@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Karim Hammoud
+    email: cunykarim@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Maliat Islam
+    email: maliat.islam21@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Matthew Lucich
+    email: matt.lucich@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Gabriella Martinez
+    email: gpmmrtzz@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Ken Popkin
+    email: krpopkin@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+abstract: |
+  In this homework assignment, we will explore, analyze and model a data set containing information on crime for various neighborhoods of a major city. Each record has a response variable indicating whether or not the crime rate is above the median crime rate (1) or not (0).  
+
+journal: "DS621 - Homework 3"
+date: "`r Sys.Date()`"
+bibliography: mybibfile.bib
+layout:  3p
+#linenumbers: true
+#numbersections: true
+csl: elsevier-harvard.csl
+output: rticles::elsevier_article
+---
+
+Our objective is to build three different binary logistic regression models on the training data set to predict whether or not neighborhoods are at risk for high crime. We will provide classifications and probabilities for the evaluation data set using your binary logistic regression model. We can only use the variables given (or
+variables derived from the variables provided). Below is a short description of the variables of interest in the data set:  
+  
+* `zn`       proportion of residential land zoned for lots over 25,000 sq.ft.
+* `indus`    proportion of non-retail business acres per town
+* `chas`     Charles River dummy variable (= 1 if tract bounds river; 0 otherwise)
+* `nox`      nitrogen oxides concentration (parts per 10 million)
+* `rm`       average number of rooms per dwelling
+* `age`      proportion of owner-occupied units built prior to 1940
+* `dis`      weighted distances to five Boston employment centers
+* `rad`      index of accessibility to radial highways
+* `tax`      full-value property-tax rate per $10,000
+* `ptratio`  pupil-teacher ratio by town
+* `lstat`    % lower status of the population
+* `medv`     median value of owner-occupied homes in $1000's
+* `target`   indicating whether or not the crime rate is above the median crime rate (1) or not (0) **response variable** 
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(here)
+#library(Hmisc)
+library(psych)
+library(corrplot)
+library(RColorBrewer)
+library(knitr)
+library(MASS)
+library(car)
+library(caret)
+library(kableExtra)
+library(ResourceSelection)
+library(pROC)
+library(Amelia)
+library(summarytools)
+library(DataExplorer)
+library(knitr)
+library(dplyr)
+library(DT)
+library(ROCR)
+library(glmnet)
+library(AICcmodavg)
+
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, 
+                      dev="cairo_pdf", fig.width=6, fig.height=3.5)
+```
+
+```{r set-theme}
+theme_set(theme_grey())
+```
+
+\newpage
+The Data
+==========================
+
+#### Data Exploration
+
+```{r load-data}
+#load data
+crime_train <- read.csv(here("analysis","data","raw_data","crime-training-data_modified.csv"))
+crime_test <- read.csv(here("analysis","data","raw_data","crime-evaluation-data_modified.csv"))
+```
+
+Exploratory data analysis is the process to get to know your data, so that a hypothesis can be generated and later tested. Visualization techniques are usually applied to aid the exploration of the data.
+
+To get introduced to the dataset, we use DataExplorer's `introduce()` function:
+
+```{r table1, table1, fig.cap="Population dynamics from a Gillespie simulation of the Levins model with large (N=1000, panel A) and small (N=100, panel B) number of sites (blue) show relatively weaker effects of demographic noise in the bigger system. Models are otherwise identical, with e = 0.2 and c = 1 (code in appendix A). Theoretical predictions for mean and plus/minus one standard deviation shown in horizontal re dashed lines."}
+kable(t(introduce(crime_train)),
+      row.names = TRUE, col.names = "", 
+      format.args = list(big.mark = ","))
+```
+  
+  
+Using dplyr's ```glimpse()```^[https://www.rdocumentation.org/packages/dplyr/versions/0.3/topics/glimpse] function, we can take a "glimpse" into both the `crime_train` and `crime_test` data respectively, and easily see the dimensions, variable names and types.  
+  
+From this `glimpse()` into the `crime_train` dataset, we confirm the two variables `chas` and `target` are factors^[https://www.stat.berkeley.edu/~s133/factors.html#] as noted in the description of variables above. These variables will be transformed in our data preparation stage.
+
+```{r}
+glimpse(crime_train)
+ 
+glimpse(crime_test)
+```
+  
+
+Next, we proceed with our exploratory data analysis by providing univariate descriptive statistics on our training dataset, `crime_train`.
+
+```{r}
+descr(crime_train,
+  headings = FALSE, #remove headings# 
+  transpose = TRUE, #allows for better display due to large amount of variables
+  stats= c("mean", "sd", "min", "q1", "med", "q3", "max")
+  )%>% 
+  kbl(caption = "Univariate Descriptive Statistics - Training Data Set") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+
+Furthermore, in the histogram plot below, we see that `medv`, and `rm` are normally distributed. We also note bi-modal distribution of the variables `indus`, `rad` and `tax`. The rest of the variables show moderate to high skewness on either side respectively.
+
+```{r fig.height=4}
+# distribution of the varaibles
+crime_train %>% 
+  gather(variable, value, zn:target) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 3) +
+  labs(x = element_blank(), y = element_blank())
+```
+
+\newpage
+In the box-plot figure below, we see many variables exhibit outliers We also see very high interquartile range for `rad` and `tax` variables where crime rate is above the median. Lastly, the variance between the 2 values of target differs for `zn`, `nox`, `age`, `dis`, `rad` & `tax`, which indicates that we will want to consider adding quadratic terms for them.
+
+```{r fig.height=6}
+crime_train %>%
+  dplyr::select(-chas) %>% 
+  gather(key, value, -target) %>% 
+  mutate(key = factor(key),
+         target = factor(target)) %>% 
+  ggplot(aes(x = key, y = value)) +
+  geom_boxplot(aes(fill = target)) +
+  facet_wrap(~ key, scales = 'free', ncol = 3) +
+  scale_fill_manual(values=c("steelblue", "firebrick")) +
+  theme_minimal()
+```
+
+
+In order to investigate if there is existing correlation between the data and the target variable, we obtain the values of correlation as well as a visualization. 
+
+\newpage
+The correlation table and plot below, we see moderate positive correlation between variables `nox`, `age`, `rad`, `tax`, `indus` and `target` variables; and moderate negative correlation between variable dis. And the rest of the variables have weak or no correlations.
+```{r}
+kable(sort(cor(dplyr::select(crime_train, target, everything()))[,1], decreasing = T), col.names = c("Correlation")) %>% 
+  kable_styling(full_width = F)
+
+```
+  
+Below is a correlation matrix of the feature variables in our dataset. The correlation matrix confirms that multicollinearity is a concern.
+
+```{r cor-matrix, fig.height = 7, fig.width = 7, warning=FALSE}
+numeric_values <- crime_train %>% select_if(is.numeric)
+train_cor <- cor(numeric_values)
+corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", lower="circle")
+```
+
+\newpage  
+Lastly, we proceed to check if there are any missing data points in the `crime_train`\\
+
+
+```{r sum-na}
+map(crime_train, ~sum(is.na(.))) %>% t() %>%
+  kable()
+```
+
+```{r missing-values}
+missmap(crime_train, main = "Missing vs Observed Values")
+```
+
+
+\newpage
+### Data Preparation
+
+**Feature Engineering**  
+In an effort to fine tune our model, we will introduce the use of feature engineering on select variables.  
+
+* `ptratio_indicator` assigned a value of 1 if the pupil to teacher ratio is > 16, 0 if `ptratio` is greater than 16 ^[https://www.publicschoolreview.com/average-student-teacher-ratio-stats/national-data]  
+* `lstat_indicator` assigned a value of 1 if > 15 % of the population is considered low status, 0 otherwise
+* `dis_indicator` assigned a value of 1 if the distance from employment centers is > 4, 0 if `dis` is less than 4 (mean value: 3.8)
+
+```{r data-transformation}
+#make a copy of original dataset
+train <- crime_train
+
+#convert chas and target to factors
+train$chas <- as.factor(train$chas)
+train$target <- as.factor(train$target)
+
+#add new variables
+train$ptratio_indicator <- as.factor(ifelse(train$ptratio < 16, 1, 0))
+train$lstat_indicator <- as.factor(ifelse(train$lstat < 15, 1, 0))
+train$dis_indicator <- as.factor(ifelse(train$dis < 4, 1, 0))
+train$age_greater_than_77 <- as.factor(ifelse(train$age >= 77, 1, 0)) #median age is 77
+```
+
+
+```{r}
+str(train)
+```
+
+\newpage
+### Data Transformation
+Some of the variables are skewed, have outliers or follow a bi-modal distribution. Therefore, we will perform transformation on some of these variables. First, we will remove the variable `tax` due to multicollinearity and it’s high VIF score. Next, we will take log() transformation of `age` and `lstat` variables to lower skewness. Lastly, we will add quadratic term to `zn`, `rad`, and `nox` variables to account for its variances with respect to target variable.
+
+```{r}
+#MI find multicollinear variables
+kable((car::vif(glm(target ~. , data = crime_train))), col.names = c("VIF Score")) %>%  #remove tax for high vif score
+  kable_styling(full_width = F)
+```
+
+```{r}
+# MI transformation of the variables. 
+trans_train <- train %>%
+  dplyr::select(-tax) %>% 
+  mutate(age = log(age),
+         lstat = log(lstat),
+         zn = zn^2,
+         rad = rad^2,
+         nox = I(nox^2))
+```
+
+```{r message=FALSE, warning=FALSE}
+# MI histogram distribution of the transformed variables
+trans_train %>% 
+  gather(key, value, c(age, lstat, zn, rad, nox)) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~ key, scales = 'free', ncol = 3) +
+  labs(x = element_blank(), y = element_blank())
+
+```
+
+```{r}
+str(trans_train)
+```
+
+\newpage
+Building the Models
+==========================
+
+First, we begin by building the null binary regression model. We will use this model to compare it to the subsequent models we build.
+
+Coefficients for the null or Intercept only model:
+```{r}
+null_model <- glm(target~1,data=train, family="binomial"(link = "logit"))
+summary(null_model)
+```
+
+### First Model 
+Next we proceed to make our first model using the both the original, untransformed variables and the engineered features.
+
+```{r fig.width=5}
+
+model_1 <- glm(target~., family = binomial(link = "logit"), data = train)
+
+summary(model_1)
+```
+
+The following lists the Marginal Model Plots for *Model 1*:
+
+```{r fig.height=5, fig.width = 6}
+mmps(model_1, layout=c(4,3))
+```
+
+Although the plot appears to hint at a good fit, certain variables seem to have many outliers which hint at weaker relationships.  Several of these are cubic or quadratic and two of these variables(the *proportion of landzones* and *distance to employment centers*) have a negative relationship. 
+
+Next, we take a look at the confidence intervals for the regression coefficients:
+
+```{r}
+confint.default(model_1)
+
+exp(cbind(OR=coef(model_1), confint.default(model_1)))
+```
+  
+The odds ratio would indicate the multiplicative change in odds of crime for every one unit increase on a predictor variable.  
+**Odds-ratios for coefficients:**
+
+```{r}
+exp(coef(model_1))
+```
+    
+### Second Model
+For our second model, we will use the `trans_train` dataset which includes the transformed variables in the previous section in addition to the engineered features.
+
+```{r}
+model_2 <- glm(target~ .,family = binomial(link = "logit"), data = trans_train)
+
+summary(model_2)
+```
+
+```{r fig.height=7, fig.width = 6}
+mmps(model_2, layout=c(4,3))
+```
+
+This plot looks very similar to model_1's, with fewer outliers and stronger relationships between the data and the model. 
+
+\newpage
+### Third Model
+For our third model, we will use some of the original variables:
+
+```{r}
+trans_train_mod_3 <- trans_train %>% 
+  dplyr::select(1:12)
+
+model_3 <- glm(target ~ . -rm -chas - age -indus, 
+             family = binomial(link = "logit"), 
+             trans_train_mod_3)
+summary(model_3)
+```
+
+```{r fig.height=7, fig.width = 6}
+mmps(model_3, layout=c(4,3))
+```
+
+Based on the Marginal model plot, model3 might be the best fit for our data. 
+
+\newpage
+Select Models
+==========================
+
+To determine if the models produced have significant improvement in fit over the null model, we make use of the `anova()` function.
+```{r}
+anova(null_model,
+      model_1,
+      model_2,
+      model_3,
+      test="LRT")
+```
+
+The Akaike information criterion (AIC) is a good test for model fit. AIC calculates the information value of each model by balancing the variation explained against the number of parameters used.
+
+In AIC model selection, we compare the information value of each model and choose the one with the lowest AIC value (a lower number means more information explained!)
+
+```{r}
+model.set <- list(model_1,
+      model_2,
+      model_3)
+model.names <- c("model1", "model2", "model3")
+
+aictab(model.set, modnames = model.names)
+```
+
+### Conclusions
+
+We fitted three models using a combination of variables/strategies: original, engineered and removing certain variables.  We looked at the marginal model plots as well as the Akaike Information Criterion.  Since for the AIC a lower number means more information explained, we have chosen Model3 as the best fit model. 
+
+\newpage
+References
+==========
+
+Minitab Support, Accessed 10/2021: "Interpret the key results for Marginal Plot"
+[https://support.minitab.com/en-us/minitab/19/help-and-how-to/graphs/marginal-plot/interpret-the-results/key-results/]
+
+Research compendium cboettig/noise-phenomena: Supplement to: “From noise to knowledge: how randomness generates novel phenomena and reveals information” by Carl Boettiger 
+
+Yogita Bor, Accessed 10/2021: Guide for building an End-to-End Logistic Regression Model.
+[https://www.analyticsvidhya.com/blog/2021/09/guide-for-building-an-end-to-end-logistic-regression-model/?utm_source=feedburner&utm_medium=email&utm_campaign=Feed%3A+AnalyticsVidhya+%28Analytics+Vidhya%29]
+
+
+
+\newpage
+Appendix A: Code
+================
+
+
+```{r echo=TRUE, eval=FALSE}
+#load data
+crime_train <- read.csv(paste("https://raw.githubusercontent.com",
+                      "/akarimhammoud/Data_621/main/Assignment_3/",
+                      "data/crime-training-data_modified.csv"))
+crime_test <- read.csv(paste("https://raw.githubusercontent.com",
+                       "/akarimhammoud/Data_621/main/Assignment_3/",
+                       "data/crime-evaluation-data_modified.csv"))
+```
+
+
+``````{r echo=TRUE, eval=FALSE}
+
+# Data Exploration 
+descr(crime_train,
+  headings = FALSE, #remove headings# 
+  transpose = TRUE #allows for better display due to large amount of variables
+  ) %>% 
+  kbl(caption = "Univariate Descriptive Statistics - Training Data Set") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+
+```{r echo=TRUE, eval=FALSE}
+# distribution of the varaibles
+crime_train %>% 
+  gather(variable, value, zn:target) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 4) +
+  labs(x = element_blank(), y = element_blank())
+```
+
+```{r echo=TRUE, eval=FALSE}
+# Check for NA values
+map(crime_train, ~sum(is.na(.))) %>% t()
+```
+
+```{r echo=TRUE, eval=FALSE}
+missmap(crime_train, main = "Missing vs Observed Values")
+```
+
+
+```{r echo=TRUE, eval=FALSE}
+#make a copy of original dataset
+train <- crime_train
+
+#convert chas and target to factors
+train$chas <- as.factor(train$chas)
+train$target <- as.factor(train$target)
+
+#add new variables
+train$ptratio_indicator <- as.factor(ifelse(train$ptratio < 16, 1, 0))
+train$lstat_indicator <- as.factor(ifelse(train$lstat < 15, 1, 0))
+train$dis_indicator <- as.factor(ifelse(train$dis < 4, 1, 0))
+train$age_greater_than_77 <- as.factor(ifelse(train$age >= 77, 1, 0)) #median age is 77
+```
+
+```{r echo=TRUE, eval=FALSE}
+#MI find multicollinear variables
+kable((car::vif(glm(target ~. ,
+                    data = crime_train))),
+      col.names = c("VIF Score")) %>%  #remove tax for high vif score
+  kable_styling(full_width = F)
+```
+
+
+```{r echo=TRUE, eval=FALSE}
+
+#capping outliers
+trans_train_cap <- train %>%
+  dplyr::select(-tax)
+```
+
+```{r echo=TRUE, eval=FALSE}
+crimeid <- c(1:12)
+for (val in crimeid) {
+  qnt <- quantile(crime_train[,val], probs=c(.25, .75), na.rm = T)
+  caps <- quantile(crime_train[,val], probs=c(.05, .95), na.rm = T)
+  H <- 1.5 * IQR(crime_train[,val], na.rm = T)
+  crime_train[,val][crime_train[,val] < (qnt[1] - H)] <- caps[1]
+  crime_train[,val][crime_train[,val] > (qnt[2] + H)] <- caps[2]
+}
+```
+
+
+```{r echo=TRUE, eval=FALSE}
+# MI transformation of the variables. 
+trans_train <- train %>%
+  dplyr::select(-tax) %>% 
+  mutate(age = log(age),
+         lstat = log(lstat),
+         zn = zn^2,
+         rad = rad^2,
+         nox = I(nox^2))
+```
+
+```{r echo=TRUE, eval=FALSE}
+# MI histogram distribution of the transformed variables
+trans_train %>% 
+  gather(key, value, c(age, lstat, zn, rad, nox)) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~ key, scales = 'free', ncol = 3) +
+  labs(x = element_blank(), y = element_blank())
+```
+
+```{r echo=TRUE, eval=FALSE}
+
+#Null Model 
+null_model <- glm(target~1,
+                  data=train, 
+                  family="binomial"(link = "logit"))
+
+#Model 1, data: train
+model_1 <- glm(target~.,
+               family = "binomial"(link = "logit"),
+               data = train)
+confint.default(model_1)
+
+exp(cbind(OR=coef(model_1), confint.default(model_1)))
+
+#Model 2 data: trans_train
+model_2 <- glm(target~ .,
+               family = binomial(link = "logit"),
+               data = trans_train)
+
+#Model 3 Data: trans_train_mod_3
+trans_train_mod_3 <- trans_train %>% 
+  dplyr::select(1:12)
+model_3 <- glm(target ~ . -rm -chas - age -indus, 
+             family = binomial(link = "logit"), 
+             trans_train_mod_3)
+
+#Comparing Models via Anova
+anova(null_model,
+      model_1,
+      model_2,
+      model_3,
+      test="LRT")
+
+
+#Comparing models with AIC 
+model.set <- list(model_1,
+      model_2,
+      model_3)
+model.names <- c("model1", "model2", "model3")
+
+aictab(model.set, modnames = model.names)
+```
