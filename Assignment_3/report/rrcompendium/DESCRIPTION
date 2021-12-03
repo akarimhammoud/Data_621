@@ -1,0 +1,41 @@
+Package: rrcompendium
+Title: HomeWork 3 - Data Science 621
+Version: 0.0.0.9000
+Authors@R:
+    c( person(given = "George",
+           family = "Cruz Deschamps",
+           role = c("aut", "cre"),
+           email = "georg4re@gmail.com"),
+    person(given = "Karim",
+           family = "Hammoud",
+           role = c("aut", "cre"),
+           email = "georg4re@gmail.com"),
+    person(given = "Maliat",
+           family = "Islam",
+           role = c("aut", "cre"),
+           email = "georg4re@gmail.com"),
+    person(given = "Matthew",
+           family = "Lucich",
+           role = c("aut", "cre"),
+           email = "georg4re@gmail.com"),
+    person(given = "Gabriella",
+           family = "Martinez",
+           role = c("aut", "cre"),
+           email = "georg4re@gmail.com"),
+    person(given = "Ken",
+           family = "Popkin",
+           role = c("aut", "cre"),
+           email = "georg4re@gmail.com"))
+Description: This repository contains the research compendium of the 
+    Homework 3 for Data Science 621. The compendium contains all data, code, 
+    and text associated with this section of the analysis
+License: MIT + file LICENSE
+ByteCompile: true
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.2
+Imports: bookdown,
+    here
+Suggests: devtools,
+    git2r

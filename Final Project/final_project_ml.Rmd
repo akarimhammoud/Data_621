@@ -33,14 +33,18 @@ library(randomForest)
 require(xgboost)
 library(Matrix)
 library(caret)
+library(here)
 require(caTools)
+
+#importing our functions
+source(here("R","draw_confusion_matrix.R"), local = knitr::knit_global())
 ```
 
 ### Load Data
 Load the data
 ```{r echo=FALSE}
 # load data
-data <- read.csv('./data/TrainingData/train_cleaned.csv')
+data <- read.csv(here('data','TrainingData','train_cleaned.csv'))
 head(data,2)
 ```
 
@@ -67,23 +71,9 @@ data <- transform(
 ### Functions
 #### Function to create train and test
 ```{r}
-#Create train data
-create_train_data  <- function(data) {
-  
-  sample = sample.split(data$AdoptionSpeed, SplitRatio = .75)
-  train = subset(data, sample == TRUE)
-  
-  return(train)
-}
 
-#Create test data
-create_test_data  <- function(data) {
-  
-  sample = sample.split(data$AdoptionSpeed, SplitRatio = .75)
-  test  = subset(data, sample == FALSE)
-  
-  return(test)
-}
+source(here("R","partition_train_test_data.R"),
+       local = knitr::knit_global())
 ```
 
 #### Function to create RF confusion matrix
@@ -130,8 +120,8 @@ rf_model_func <- function(data) {
 ```{r}
 xg_model_func <- function(data) {
   #train, test data for XG model 1
-  xg_train = as.matrix(create_train_data(xg_model1_data))
-  xg_test = as.matrix(create_test_data(xg_model1_data))
+  xg_train = as.matrix(create_train_data(data))
+  xg_test = as.matrix(create_test_data(data))
   
   #separate out the label
   adoption_speed_train = xg_train[ , ncol(xg_train)]
@@ -172,6 +162,11 @@ rf_confusion_matrix = rf_model_func(rf_model1_data)
 rf_confusion_matrix
 ```
 
+```{r}
+draw_confusion_matrix(rf_confusion_matrix)
+```
+
+
 #### RF Model #2
 ```{r}
 #dataframe for RF model 2
@@ -179,6 +174,10 @@ rf_model2_data = subset(data, select = c(Type,AgeYears,AdoptionSpeed))
   
 rf_confusion_matrix = rf_model_func(rf_model2_data)
 rf_confusion_matrix
+```
+
+```{r}
+draw_confusion_matrix(rf_confusion_matrix)
 ```
 
 #### RF Model #3
@@ -215,6 +214,6 @@ xg_confusion_matrix
 #dataframe for XG model 3
 xg_model3_data = subset(data, select = c(Type,Breed1,FurLength,Gender,AgeYears,AdoptionSpeed))
 
-xg_confusion_matrix = xg_model_func(xg_model3_data)
-xg_confusion_matrix
+#xg_confusion_matrix = xg_model_func(xg_model3_data)
+#xg_confusion_matrix
 ```
