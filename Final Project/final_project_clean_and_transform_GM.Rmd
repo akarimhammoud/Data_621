@@ -74,6 +74,8 @@ library(forcats)
 library(kableExtra)
 library(summarytools)
 library(stats)
+library(GGally)
+library(wordcloud)
 ```
 
 ### Load Data
@@ -287,6 +289,7 @@ Remove one Fox Terrier of the two entries. Both entries have the same size data,
 breed_size <- breed_size %>% 
   slice(-116)
 ```
+
 ```{r}
 breed_size$BreedName <- recode(breed_size$BreedName, 
                                "Collie (Rough) & (Smooth)" = "Collie",
@@ -514,6 +517,101 @@ cbrt_distributions %>%
 ```
 
 Based on the above, all variables are still heavily right skewed with the exception of `PhotoAmt` which made some improvement, but still not normally distributed. 
+
+
+## Exploratory Data Analysis
+
+```{r}
+#copy of data
+train_data <- dog_data_merge1
+```
+
+```{r}
+train_data <- train_data %>% 
+  select(-c(Breed1, Color1, Color2, Color3))
+
+str(train_data)
+```
+
+Below we use `wordcloud` to visualize the dog breeds in our data. Note the Mixed Breed has been removed as it was skewing our data with the highest number of observations with 5923 total.
+
+```{r}
+set.seed(123)
+wordtable <- table(train_data$breedname) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Freq)) %>% 
+  slice(c(-1))
+
+wordcloud(words = wordtable$Var1, freq = wordtable$Freq,
+          max.words=250,random.order=FALSE, scale=c(2,.8),
+          rot.per=0.1, colors=brewer.pal(8, "Dark2"))
+```
+
+
+As part of exploring the data, below we look into our response variable and see which level of `AdoptionSpeed` has the most occurrences.   
+As a reminder from above, below is the legend for our `AdoptionSpeed` factor levels.  
+  
+Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.  
+  
+The values are determined in the following way:  
+
+- 0: Pet was adopted on the same day as it was listed.
+- 1: Pet was adopted between 1 and 7 days (1st week) after being listed.
+- 2: Pet was adopted between 8 and 30 days (1st month) after being listed.
+- 3: Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed. 
+- 4: No adoption after 100 days of being listed.  
+
+Below we see that most dogs don't get adopted after 100 days of being listed. The next highest level would be adoption within the first month of listing.
+```{r}
+train_data %>% 
+  group_by(AdoptionSpeed) %>%
+  summarise(Count = length(AdoptionSpeed)) %>% 
+  ggplot(aes(x=fct_reorder(factor(AdoptionSpeed),Count), 
+             y= Count))+
+  geom_col(position="dodge", fill= "steelblue")+
+  geom_text(aes(label = Count, hjust = 1))+
+  coord_flip()+
+  labs(x= "Adoption Speed", y = "Count")+
+  theme_minimal()
+
+```
+
+```{r message=FALSE, warning=FALSE}
+train_data %>% 
+  group_by(PhotoAmt) %>%
+  summarise(Count = length(PhotoAmt)) %>% 
+  arrange(desc(Count)) %>% 
+  top_n(10) %>% 
+  ggplot(aes(x=fct_reorder(factor(PhotoAmt),Count), 
+             y= Count))+
+  geom_col(position="dodge", fill= "steelblue")+
+  geom_text(aes(label = Count, hjust = 1))+
+  coord_flip()+
+  labs(x= "Photos per Listing", y = "Listing Count")+
+  theme_minimal()
+```
+
+Below is a visual showing the amount of dogs per observation. The majority of the observation are single dog listings, but there are a number of listings with multiple dogs which in some cases may be a litter or two of dogs under one listing.
+```{r message=FALSE, warning=FALSE}
+train_data %>% 
+  group_by(Quantity) %>%
+  summarise(Count = length(Quantity)) %>% 
+  arrange(desc(Count)) %>% 
+  top_n(5)%>% 
+  ggplot(aes(x=fct_reorder(factor(Quantity),Count), 
+             y= Count))+
+  geom_col(position="dodge", fill= "steelblue")+
+  geom_text(aes(label = Count, hjust = 1))+
+  coord_flip()+
+  labs(x= "Pets per Listing", y = "Listing Count")+
+  theme_minimal()
+```
+
+
+
+
+
+
 
 ###Output an updated csv 
 ```{r}
