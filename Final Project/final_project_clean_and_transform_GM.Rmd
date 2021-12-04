@@ -76,6 +76,7 @@ library(summarytools)
 library(stats)
 library(GGally)
 library(wordcloud)
+library(Amelia)
 ```
 
 ### Load Data
@@ -175,7 +176,7 @@ data <- transform(
 str(data)
 ```
 
-## Add Labels for Colors
+## Add Labels 
 Import the color labels to see the names of the colors.
 
 ```{r}
@@ -228,20 +229,81 @@ data$ColorName3 <- recode_factor(data$Color3, "0" = "NA",
                                 "7"= "White")
 ```
 
+```{r}
+table(data$VideoAmt)
+
+data$VideoAmt[data$VideoAmt == 0] <- NA
+
+```
+
 
 Converting the `char` version of "NA" introduced in `ColorName`s 1-3 to type NA.
 ```{r}
 data[data=="NA"]<-NA
 ```
 
+Adding labels to `Gender` variable per definitions assigned to create `GenderLabel`.
+```{r}
+#data$GenderLabel
+data$Gender <- recode_factor(data$Gender, "1" = "Male",
+                                  "2" = "Female",
+                                  "3" = "Mixed")
+```
+
+
+```{r}
+#levels(data$MaturitySize)
+#MaturitySize - Size at maturity (1 = Small, 2 = Medium, 3 = Large, 4 = Extra Large, 0 = Not Specified)
+#data$MaturitySizeLabel
+data$MaturitySize <- recode_factor(data$MaturitySize, "1" = "Small", 
+                                   "2" = "Medium",
+                                   "3" = "Large",
+                                   "4" = "Extra Large")
+```
+
+```{r}
+data$Vaccinated <-recode_factor(data$Vaccinated, 
+                                   "1" = "Yes",
+                                   "2" = "No",
+                                   "3" = "Not Sure")
+data$Dewormed <-recode_factor(data$Dewormed, 
+                                   "1" = "Yes",
+                                   "2" = "No",
+                                   "3" = "Not Sure")
+data$Sterilized <-recode_factor(data$Sterilized, 
+                                   "1" = "Yes",
+                                   "2" = "No",
+                                   "3" = "Not Sure")
+#turns the Not Sure into NAs
+levels(data$Vaccinated)[levels(data$Vaccinated)=='Not Sure'] <- NA
+levels(data$Dewormed)[levels(data$Dewormed)=='Not Sure'] <- NA
+levels(data$Sterilized)[levels(data$Sterilized)=='Not Sure'] <- NA
+```
+
+```{r}
+#1 = Healthy, 2 = Minor Injury, 3 = Serious Injury, 0 = Not Specified
+data$Health <-recode_factor(data$Health, 
+                                   "1" = "Healthy", 
+                                   "2" = "Minor Injury", 
+                                   "3" = "Serious Injury")
+```
+
+```{r}
+#FurLength - Fur length (1 = Short, 2 = Medium, 3 = Long, 0 = Not Specified)
+data$FurLength <-recode_factor(data$FurLength, 
+                                   "1" = "Short", 
+                                   "2" = "Medium", 
+                                   "3" = "Long")
+```
+
 ## Dog Breed Data *woof*
 
-Lets check how many dogs and cats we have:
+Lets check how many dog and cat listings we have:
 ```{r}
 table(data$Type)
 ```
 
-It looks like we have 1262 more dogs than cats, with 8132 dogs and 6861 cats.
+It looks like we have 1262 more dog listings than cat, with 8132 dog and 6861 cat.
 
 Subset `data` by `Type` to focus on dogs.  
 ```{r}
@@ -262,6 +324,10 @@ dog_data$breedname <- fct_collapse(dog_data$breedname,
                                      c("Black Labrador Retriever",
                                        "Chocolate Labrador Retriever",
                                        "Yellow Labrador Retriever"))
+dog_data$breedname <- fct_collapse(dog_data$breedname,
+                                   'Jack Russell Terrier' = 
+                                     "Jack Russell Terrier (Parson Russell Terrier)")
+
 ```
 
 Below are the top 10 breeds where Mixed Breed has a heavy majority with more than half of the dogs being categorized as a mix.
@@ -269,8 +335,8 @@ Below are the top 10 breeds where Mixed Breed has a heavy majority with more tha
 table(dog_data$breedname) %>% 
   as.data.frame() %>% 
   arrange(desc(Freq)) %>% 
-  top_n(10)
-  #subset(Freq!=0)
+  #top_n(10)
+  subset(Freq!=0)
 ```
 
 ### Size Label by Breed
@@ -547,7 +613,6 @@ wordcloud(words = wordtable$Var1, freq = wordtable$Freq,
           rot.per=0.1, colors=brewer.pal(8, "Dark2"))
 ```
 
-
 As part of exploring the data, below we look into our response variable and see which level of `AdoptionSpeed` has the most occurrences.   
 As a reminder from above, below is the legend for our `AdoptionSpeed` factor levels.  
   
@@ -608,8 +673,28 @@ train_data %>%
 ```
 
 
+```{r fig.height=7, fig.width=10}
+map(train_data, ~sum(is.na(.))) %>% t()
+missmap(train_data, main = "Missing vs Observed Values")
+```
+
+After making this visualization, it will be best to remove the variables `hypoallergenic` and `size` created earlier as a great amount of observations are `NA` as well as `VideoAmt` and `ColorName3`.
 
 
+#### Correlation Plot
+
+<This should be after removing the variables with a lot of NA>
+```{r}
+numeric_values <- train_data 
+numeric_values$AdoptionSpeed <- as.numeric(numeric_values$AdoptionSpeed)
+
+numeric_values<- numeric_values %>% 
+  select_if(is.numeric)
+ 
+train_cor <- cor(numeric_values)
+corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", lower="circle")
+
+```
 
 
 
