@@ -1,0 +1,798 @@
+---
+title: "DATA621: Final Project"
+author: "Group 2: George Cruz Deschamps, Karim Hammoud, Maliat Islam, Gabriella Maritnez, Ken Popkin"
+date: "Date: `r Sys.Date()` Due:2021-12-12" 
+output:
+      html_document:
+        toc: yes
+        toc_float: yes
+        theme: yeti
+        highlight: kate
+        font-family: "Arial"
+        code_folding: "show"
+---
+
+## Overview
+There are millions of stray pets around the world, some of which are fortunate enough to be adopted while many others are not.  While adoption of a pet is often the definition of success, the rate at which a pet is adopted is also a key success factor - pets that take a long time to adopt contribute to over-crowded animal shelters and can prevent taking on new strays.  Sadly, pets that are not adopted eventually need to be euthanized.
+
+### Learn more about the data
+[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
+
+- PetID - Unique hash ID of pet profile
+- AdoptionSpeed - **response variable** Categorical speed of adoption. Lower is faster. 
+- Type - Type of animal (1 = Dog, 2 = Cat)
+- Name - Name of pet (Empty if not named)
+- Age - Age of pet when listed, in months
+- Breed1 - Primary breed of pet (Refer to BreedLabels dictionary)
+- Breed2 - Secondary breed of pet, if pet is of mixed breed (Refer to BreedLabels dictionary)
+- Gender - Gender of pet (1 = Male, 2 = Female, 3 = Mixed, if profile represents group of pets)
+- Color1 - Color 1 of pet (Refer to ColorLabels dictionary)
+- Color2 - Color 2 of pet (Refer to ColorLabels dictionary)
+- Color3 - Color 3 of pet (Refer to ColorLabels dictionary)
+- MaturitySize - Size at maturity (1 = Small, 2 = Medium, 3 = Large, 4 = Extra Large, 0 = Not Specified)
+- FurLength - Fur length (1 = Short, 2 = Medium, 3 = Long, 0 = Not Specified)
+- Vaccinated - Pet has been vaccinated (1 = Yes, 2 = No, 3 = Not Sure)
+- Dewormed - Pet has been dewormed (1 = Yes, 2 = No, 3 = Not Sure)
+- Sterilized - Pet has been spayed / neutered (1 = Yes, 2 = No, 3 = Not Sure)
+- Health - Health Condition (1 = Healthy, 2 = Minor Injury, 3 = Serious Injury, 0 = Not Specified)
+- Quantity - Number of pets represented in profile
+- Fee - Adoption fee (0 = Free)
+- State - State location in Malaysia (Refer to StateLabels dictionary)
+- RescuerID - Unique hash ID of rescuer
+- VideoAmt - Total uploaded videos for this pet
+- PhotoAmt - Total uploaded photos for this pet
+- Description - Profile write-up for this pet. The primary language used is English, with some in Malay or Chinese.
+
+### What to Predict
+Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
+
+The values are determined in the following way:
+0 - Pet was adopted on the same day as it was listed.
+1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
+2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
+3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+4 - No adoption after 100 days of being listed.
+
+## This Notebook...
+The data has no missing values, but there are a number of features in text that need to be converted to some numeric value. This notebook performs those changes.
+
+```{r message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(reshape)
+library(ggplot2)
+library(purrr)
+library(psych)
+library(tidyr)
+library(corrplot)
+library(forcats)
+library(kableExtra)
+library(stats)
+library(GGally)
+library(wordcloud)
+library(caret )
+```
+
+### Load Data
+Load the data
+```{r echo=FALSE}
+# load data
+data <- read.csv('./data/TrainingData/traindatawithbreedname.csv')
+#data <- read.csv('./data/TestData/test.csv')
+head(data,2)
+```
+
+## Missing Values Count 
+There are no missing values
+```{r}
+map(data, ~sum(is.na(.))) %>% t()
+```
+
+## Show the type of each data
+```{r}
+str(data)
+```
+
+## New features
+AgeYears - provided in months this is too many variations.  Decided to convert to new feature of AgeYears and drop Age
+```{r}
+data$AgeYears = round(data$Age/12, 0)
+```
+
+NumColors - derived by counting the number of colors a pet has using the Color1,2, and 3 features
+- keep these features, but given there are 7 color categories the value of this feature is questionable in doubt
+- create a NumColors feature with a 1,2, or 3 respectively
+```{r}
+num_colors_vec = c()
+for (i in 1:nrow(data)){
+  ncolors = 1
+  
+  color2 <- data[i,8]
+  color3 <- data[i,9]
+  
+  if (color2 > 0){ncolors = ncolors + 1}
+  if (color3 > 0){ncolors = ncolors + 1}
+  
+  num_colors_vec <- c(num_colors_vec, ncolors)
+}
+
+data$NumColors = num_colors_vec
+```
+
+AllMeds = the sum of Vaccinated, Dewormed, and Sterilized.  Combining these into one feature could potentially reduce
+multi-collinearity
+```{r}
+data$AllMeds = data$Vaccinated + data$Dewormed + data$Sterilized
+```
+
+### Remove features 
+Remove the following features...
+Name - this is a text field and new owners can (and usually do) rename their pets, so removing this feature
+Age - replaced with AgeYears (see above)
+Breed2 - 10,700 of almost 15,000 rows are populated with 0 (unknown), so this doesn't seem like a good feature to keep
+State - initially kept this, but the correlation to AdoptionSpeed is only about 2%.  Decided to remove it
+RescuerID - common sense is that this field will not have any predictive value for adoption rate
+Description - this will have value in future analysis for NLP, but this will be evaluated differently in another notebook
+PetID - same reason as RescuerID
+
+```{r}
+data = subset(data, select = -c(Name, Age, Breed2, State, RescuerID, Description, PetID))
+```
+
+### Show the updated data type
+```{r}
+sapply(data,class)
+```
+
+#Change categorical variables from integer to factors
+```{r}
+data <- transform(
+  data,
+  Type=as.factor(Type),
+  Breed1=as.factor(Breed1),
+  Gender=as.factor(Gender),
+  Color1=as.factor(Color1),
+  Color2=as.factor(Color2),
+  Color3=as.factor(Color3),
+  MaturitySize=as.factor(MaturitySize),
+  FurLength=as.factor(FurLength),
+  Vaccinated = as.factor(Vaccinated),
+  Dewormed = as.factor(Dewormed),
+  Sterilized = as.factor(Sterilized),
+  Health = as.factor(Health),
+  AdoptionSpeed = as.factor(AdoptionSpeed),
+  NumColors = as.factor(NumColors)
+)
+```
+
+
+```{r}
+str(data)
+```
+
+## Add Labels for Colors
+Import the color labels to see the names of the colors.
+
+```{r}
+colors <- read.csv('./data/color_labels.csv')
+
+glimpse(colors)
+```
+Checking the levels of `Color1`, `Color2`, and `Color3`
+
+```{r}
+levels(data$Color1)
+```
+```{r}
+levels(data$Color2)
+```
+
+```{r}
+levels(data$Color3)
+```
+
+Creating new variables to name the colors.
+
+```{r}
+data$ColorName1 <- recode_factor(data$Color1,"1"= "Black", 
+                                "2"= "Brown", 
+                                "3"= "Golden", 
+                                "4"= "Yellow", 
+                                "5"= "Cream", 
+                                "6"= "Gray", 
+                                "7"= "White")
+  
+```
+
+```{r}
+data$ColorName2 <- recode_factor(data$Color2, "0" = "NA",
+                                "2"= "Brown", 
+                                "3"= "Golden", 
+                                "4"= "Yellow", 
+                                "5"= "Cream", 
+                                "6"= "Gray", 
+                                "7"= "White")
+```
+
+```{r}
+data$ColorName3 <- recode_factor(data$Color3, "0" = "NA",
+                                "3"= "Golden", 
+                                "4"= "Yellow", 
+                                "5"= "Cream", 
+                                "6"= "Gray", 
+                                "7"= "White")
+```
+
+
+Converting the `char` version of "NA" introduced in `ColorName`s 1-3 to type NA.
+```{r}
+data[data=="NA"]<-NA
+```
+
+## Dog Breed Data *woof*
+
+Lets check how many dogs and cats we have:
+```{r}
+table(data$Type)
+```
+
+It looks like we have 1262 more dogs than cats, with 8132 dogs and 6861 cats.
+
+Subset `data` by `Type` to focus on dogs.  
+```{r}
+dog_data = filter(data, Type == 1)
+dog_data = subset(dog_data, select = -c(Type))
+```
+
+### Dog (data) Wrangling 
+
+```{r}
+dog_data$breedname <- gsub("Amer ", "American ", dog_data$breedname) 
+```
+
+Next we will collapse duplicate Labrador Retriever factors (Black, Chocolate, and Yellow) into one as they are not considered to be separate [Retriever breeds](https://www.akc.org/expert-advice/dog-breeds/retriever-breeds/).
+```{r}
+dog_data$breedname <- fct_collapse(dog_data$breedname, 
+                                   'Labrador Retriever' = 
+                                     c("Black Labrador Retriever",
+                                       "Chocolate Labrador Retriever",
+                                       "Yellow Labrador Retriever"))
+```
+
+Below are the top 10 breeds where Mixed Breed has a heavy majority with more than half of the dogs being categorized as a mix.
+```{r}
+table(dog_data$breedname) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Freq)) %>% 
+  top_n(10)
+  #subset(Freq!=0)
+```
+
+### Size Label by Breed
+
+When deciding to adopt a new pet a consideration many people have is the size of the dog for a number of reasons. Size plays an important role in a dog's strength and activity level which is a concern for a potential new owner, in addition to space in ones house or if they have a backyard or not. 
+
+Next we bring in the AKC Breed Info table to load details on dog sizes by breed.
+```{r}
+breed_size <- read.csv('./data/TrainingData/AKC Breed Info.csv')
+
+str(breed_size)
+```
+
+Remove one Fox Terrier of the two entries. Both entries have the same size data, only difference is hair type (smooth vs. wire).
+```{r}
+breed_size <- breed_size %>% 
+  slice(-116)
+```
+
+```{r}
+breed_size$BreedName <- recode(breed_size$BreedName, 
+                               "Collie (Rough) & (Smooth)" = "Collie",
+                               "Fox Terrier ‰ÛÒ Wirehair" = "Fox Terrier")
+```
+
+Using the `breed_size` table, a feature can be created using the [American Kennel Club Breeds by Size](https://www.petplace.com/article/dogs/pet-care/american-kennel-club-akc-breeds-by-size/) breakdown.
+
+Alternatively, here is another breed type [breakdown by size](https://citydogslife.com/small-medium-large-dog-size-guide/).
+
+```{r}
+breed_size$avg_weight <- rowMeans(breed_size[,c('weight_low_lbs', 
+                                                'weight_high_lbs')], na.rm=TRUE)
+```
+
+
+Since there are two types of Cocker Spaniels (American and English) in our `breed_size` table, and our `dog_data` has Cocker Spaniel, I took the average of both the American and English to give an idea of what a general Cocker Spaniel might weigh to then be able to classify its size.
+
+```{r}
+#[row,column]
+breed_size$height_low_inches <- as.integer(breed_size$height_low_inches)
+breed_size$height_high_inches <- as.integer(breed_size$height_high_inches)
+
+#cocker spaniel avg
+cs <- sapply(breed_size[c(68,69),],mean)
+breed_size<-rbind(breed_size, cs)
+
+breed_size[150,1] = "Cocker Spaniel"
+breed_size[68,1] ="American Cocker Spaniel"
+breed_size[69,1] ="English Cocker Spaniel"
+
+#poodle avg
+poodle <- sapply(breed_size[c(122,48,147),],mean)
+breed_size<-rbind(breed_size, poodle)
+breed_size[151,1] = "Poodle"
+```
+
+#### Add feature
+
+Create a `size` feature based on breed using `case_when()`^[https://dplyr.tidyverse.org/reference/case_when.html].
+```{r}
+breed_size<- breed_size %>% 
+  mutate(
+    size = case_when(
+      (avg_weight >= 3 & avg_weight < 9) ~ "toy",
+      (avg_weight >= 9 & avg_weight < 35) ~ "small",
+      (avg_weight >= 35 & avg_weight < 65) ~ "medium",
+      (avg_weight >= 65 & avg_weight < 85) ~ "large",
+      (avg_weight >= 85) ~ "giant"
+    )
+  )
+```
+
+
+Now we will `left_join()` ^[https://youtu.be/RKgd-0DdFo8] our `dog_data` with our `breed_size` to bring in the size feature by breed.
+```{r}
+dog_data_merge <- left_join(dog_data, select(breed_size, c(1,7)), 
+                            by=c("breedname" = "BreedName"))
+
+dog_data_merge$size <- as.factor(dog_data_merge$size)
+
+table(dog_data_merge$size) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Freq))
+```
+
+### Hypoallergenic
+
+What is a hypoallergenic dog?  
+
+According to the American College of Allergy, Asthma, and Immunology, as much as 10% of the U.S. population is allergic to dogs. While there are no 100% hypoallergenic dogs, there are many breeds that do well with allergy sufferers. Dander, which is attached to pet hair, is what causes most pet allergies in humans and these dogs have a non-shedding coat that produces less dander.  
+
+So if you are either part of the 10% of the U.s. population that is allergic to dogs or just don't like to have to vacuum dog hair twice a day then a hypoallergenic dog will be more appealing to you than a non-hypoallergenic dog.
+
+#### Add feature
+
+Below we create a dataframe using the list of [hypoallergenic](https://www.akc.org/dog-breeds/hypoallergenic-dogs/) dogs from the American Kennel Club. Once created, we `left_join()` it to our `dog_data_merge` dataframe to add the new feature for analysis.
+
+```{r}
+breed <- c("Affenpinscher", "Afgan Hound", "American Hairless Terrier", 
+                    "Barbado da Terceira", "Bedlington Terrier", "Bichon Frise",
+                    "Bolongese", "Chinese Crested", "Coton de Tulear", 
+                    "Giant Schnauzer", "Irish Water Spaniel", 
+                    "Kerry Blue Terrier","Lagotto Romangnolo", "Lowchen", 
+                    "Maltese","Miniature Shnauzer","Peruvian Inca Orchid", 
+                    "Poodle", "Standard Poodle", "Schnauzer", 
+                    "Portuguese Water Dog", "Russian Tsvetnaya Bolonka", 
+                    "Wheaten Terrier","Xoloitzcuintli", "Yorkshire Terrier"
+                    )
+hypoallergenic <- as.data.frame(breed)
+hypoallergenic$hypoallergenic <- "Yes"
+```
+
+```{r}
+dog_data_merge1 <- left_join(dog_data_merge, hypoallergenic, 
+                             by=c("breedname" = "breed"))
+
+#when breedname = Mixed Breed & NA hypo = NA, all else should be "No" 
+dog_data_merge1$hypoallergenic[is.na(dog_data_merge1$hypoallergenic)] <- "No"
+
+dog_data_merge1$hypoallergenic[which(dog_data_merge1$breedname == "Mixed Breed")] <- NA
+dog_data_merge1$hypoallergenic[which(is.na(dog_data_merge1$breedname))] <- NA
+
+dog_data_merge1$hypoallergenic <- as.factor(dog_data_merge1$hypoallergenic)
+```
+
+How many hypoallergenic and non-hypoallergenic do we have?
+```{r}
+table(dog_data_merge1$hypoallergenic)
+sum(table(dog_data_merge1$hypoallergenic))
+```
+
+Mixed Breeds and breeds that are NA in the `breedname` column will be NA for `hypoallergenic` as it logically can't be confirmed if they are hypoallergenic or not. In general, there are Mixed Breeds that can be considered hypoallergenic. For example, a dog that is part Poodle (hypoallergenic) and part cavalier King Charles Spaniel (non-hypoallergenic) can be considered hypoallergenic, the resulting pup would is often called Cavapoo or Cavoodle.
+
+How many NA breed do we have?
+```{r}
+table(is.na(dog_data_merge1$breedname))
+```
+How many are Mixed Breed?
+```{r}
+table(dog_data_merge1$breedname=="Mixed Breed")
+```
+
+## Distributions of Numeric Variables
+
+Here we check our data with the added features of `size` and `hypoallergenic`.
+```{r}
+str(dog_data_merge1)
+```
+
+Converting the `breedname` and `AllMeds` variables to factor.
+```{r}
+dog_data_merge1$breedname <- as.factor(dog_data_merge1$breedname)
+
+dog_data_merge1$AllMeds <- as.factor(dog_data_merge1$AllMeds)
+```
+
+Here we are subsetting our numeric predictor variables to check their distributions.
+```{r}
+#subset our 3 vars
+distributions <- dog_data_merge1 %>% 
+  keep(is.numeric)
+```
+
+Next we check if the variables contain any NA values.
+```{r}
+colSums(is.na(distributions))
+```
+
+
+```{r}
+#plot
+distributions %>% 
+  gather(variable, value, 1:5) %>%
+  ggplot(aes(value)) +
+    facet_wrap(~variable, scales = "free") +
+    geom_density(fill = "steelblue", alpha=0.9, color="steelblue") +
+    geom_histogram(aes(y=..density..), alpha=0.2, fill = "lightblue", color="lightblue", position="identity") +
+    theme_minimal()
+```
+
+
+```{r}
+#box plots
+distributions %>% 
+  gather() %>%
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_boxplot(fill = "steelblue", color="black", outlier.colour="red", outlier.shape=16,
+             outlier.size=2, notch=FALSE) +
+  theme_minimal()
+```
+
+
+```{r}
+head(dog_data_merge1)
+```
+Transformations of numeric variables
+Next we will take transformations of the variables reviewed above to see if the transformed variables are worth looking into and using for our model.
+
+Log Transformations
+
+Hide
+
+
+```{r}
+log_distributions <- log(distributions + 1)
+
+# Histograms of log transformed numeric variables
+log_distributions %>%
+  gather(variable, value, 1:5) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 3) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+
+
+
+Square Root transformations
+
+```{r}
+sqrt_distributions <- sqrt(distributions)
+
+sqrt_distributions %>% 
+  gather(variable, value, 1:5) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 3) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+
+
+Cube root transformations
+
+```{r}
+cbrt_distributions <- (distributions)^(1/3)
+
+cbrt_distributions %>% 
+  gather(variable, value, 1:5) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 3) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+
+Based on the above, all variables are still heavily right skewed with the exception of PhotoAmt which made some improvement, but still not normally distributed.
+
+Exploratory Data Analysis
+Hide
+```{r}
+#copy of data
+train_data <- dog_data_merge1
+```
+
+```{r}
+train_data <- train_data %>% 
+  select(-c(Breed1, Color1, Color2, Color3))
+
+str(train_data)
+```
+
+
+Below we use wordcloud to visualize the dog breeds in our data. Note the Mixed Breed has been removed as it was skewing our data with the highest number of observations with 5923 total.
+
+
+```{r}
+set.seed(123)
+wordtable <- table(train_data$breedname) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Freq)) %>% 
+  slice(c(-1))
+
+wordcloud(words = wordtable$Var1, freq = wordtable$Freq,
+          max.words=250,random.order=FALSE, scale=c(2,.8),
+          rot.per=0.1, colors=brewer.pal(8, "Dark2"))
+```
+
+
+
+As part of exploring the data, below we look into our response variable and see which level of AdoptionSpeed has the most occurrences.
+As a reminder from above, below is the legend for our AdoptionSpeed factor levels.
+
+Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
+
+The values are determined in the following way:
+
+0: Pet was adopted on the same day as it was listed.
+1: Pet was adopted between 1 and 7 days (1st week) after being listed.
+2: Pet was adopted between 8 and 30 days (1st month) after being listed.
+3: Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+4: No adoption after 100 days of being listed.
+Below we see that most dogs don’t get adopted after 100 days of being listed. The next highest level would be adoption within the first month of listing.
+
+```{r}
+train_data %>% 
+  group_by(AdoptionSpeed) %>%
+  summarise(Count = length(AdoptionSpeed)) %>% 
+  ggplot(aes(x=fct_reorder(factor(AdoptionSpeed),Count), 
+             y= Count))+
+  geom_col(position="dodge", fill= "steelblue")+
+  geom_text(aes(label = Count, hjust = 1))+
+  coord_flip()+
+  labs(x= "Adoption Speed", y = "Count")+
+  theme_minimal()
+```
+
+
+```{r}
+train_data %>% 
+  group_by(PhotoAmt) %>%
+  summarise(Count = length(PhotoAmt)) %>% 
+  arrange(desc(Count)) %>% 
+  top_n(10) %>% 
+  ggplot(aes(x=fct_reorder(factor(PhotoAmt),Count), 
+             y= Count))+
+  geom_col(position="dodge", fill= "steelblue")+
+  geom_text(aes(label = Count, hjust = 1))+
+  coord_flip()+
+  labs(x= "Photos per Listing", y = "Listing Count")+
+  theme_minimal()
+```
+
+Below is a visual showing the amount of dogs per observation. The majority of the observation are single dog listings, but there are a number of listings with multiple dogs which in some cases may be a litter or two of dogs under one listing.
+
+```{r}
+train_data %>% 
+  group_by(Quantity) %>%
+  summarise(Count = length(Quantity)) %>% 
+  arrange(desc(Count)) %>% 
+  top_n(5)%>% 
+  ggplot(aes(x=fct_reorder(factor(Quantity),Count), 
+             y= Count))+
+  geom_col(position="dodge", fill= "steelblue")+
+  geom_text(aes(label = Count, hjust = 1))+
+  coord_flip()+
+  labs(x= "Pets per Listing", y = "Listing Count")+
+  theme_minimal()
+```
+```{r}
+numeric_values <- train_data 
+numeric_values$AdoptionSpeed <- as.numeric(numeric_values$AdoptionSpeed)
+
+numeric_values<- numeric_values %>% 
+  select_if(is.numeric)
+ 
+  
+
+
+train_cor <- cor(numeric_values)
+corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", lower="circle")
+
+```
+
+```{r}
+library(Amelia)
+
+map(train_data, ~sum(is.na(.))) %>% t()
+```
+
+
+```{r}
+missmap(train_data, main = "Missing vs Observed Values")
+```
+
+
+
+Based on the above, all variables are still heavily right skewed with the exception of PhotoAmt which made some improvement, but still not normally distributed.
+
+Exploratory Data Analysis
+
+
+## Creating binary variable for th adoption speed, 1 for adopted and 0 for not adopted
+
+```{r}
+
+# change all of the values in the data set to 1 or 0
+train_data$AdoptionSpeed[train_data$AdoptionSpeed !=0 ] <- 1
+
+```
+As a binary variable now I will conduct a binary regression analysis on it.
+
+#### Binomial NULL Model
+
+```{r}
+# Build the binomial null regression
+model1 <- glm(AdoptionSpeed ~ 1, data = train_data, family = binomial(link ="logit"))
+summary(model1)
+```
+
+From the null regression we can see the AIC is 1653.5 
+
+#### Binomial Model
+
+Binary Logistic Regression Full model utilizing all the variables and data, This model will be considered to be valid..
+
+```{r, warning=FALSE}
+#  Binomial  Model
+model2 <- glm(AdoptionSpeed ~  Gender+MaturitySize +FurLength+ Vaccinated+ Dewormed+ Sterilized + Health + Quantity + Fee + VideoAmt + PhotoAmt + AgeYears + NumColors, data = train_data, family = binomial(link ="logit"))
+
+summary(model2)
+
+plot(model2)
+
+```
+
+Checking the resul of the model, we can see the difference between teh different variables in the data set, as the AIC 1625.2
+
+
+I will select the variables using the step method
+
+The ‘Step’ function in R performs a Step model selection with an objective to minimize the AIC value.
+
+**Using Step in both direction**
+
+Create multiple models using the STEP function from R, here we check model1 and model2 and run a step in both direcction on these models.
+
+```{r include=FALSE}
+step_b <- step(model1, scope = list(upper=model2),direction="both")
+```
+
+Let's check an ANOVA table based on the above testing results.
+
+```{r}
+step_b$anova
+```
+
+From the above results, it shows  that the best model is as follows:
+
+```{r}
+summary(step_b)
+```
+
+
+We see how all the predictors are statistical significant, also, noticing how the variable are as statistical significant and the compared values.
+
+
+The below plot shows our fitted models vs Density.
+
+```{r}
+hist(step_b$fitted.values, main = " Histogram ",xlab = "Fitted models", col = 'skyblue3')
+```
+
+Show the predicted values
+
+```{r}
+train_data$Predict <- ifelse(step_b$fitted.values >0.5,"pos","neg")
+head(train_data$Predict)
+```
+
+Here we can see the model works really well on the train data, we need to use it on the evaluation data and check the accuracy of the model on it.
+
+### Using the model to predict the evaluation data
+
+Pulling the evaluation data from Github
+```{r}
+evaluation <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TestData/test_cleaned.csv")
+```
+
+Transform the variables in the evaluation data.
+
+```{r}
+evaluation <- transform(
+  evaluation,
+  Type=as.factor(Type),
+  Breed1=as.factor(Breed1),
+  Gender=as.factor(Gender),
+  Color1=as.factor(Color1),
+  Color2=as.factor(Color2),
+  Color3=as.factor(Color3),
+  MaturitySize=as.factor(MaturitySize),
+  FurLength=as.factor(FurLength),
+  Vaccinated = as.factor(Vaccinated),
+  Dewormed = as.factor(Dewormed),
+  Sterilized = as.factor(Sterilized),
+  Health = as.factor(Health),
+  NumColors = as.factor(NumColors)
+)
+```
+
+Here lets transform the evaluation data to fit the model where we used the train data.
+
+```{r}
+#transformed variables
+evaluation <- evaluation %>% 
+  dplyr::select(Gender,MaturitySize ,FurLength, Vaccinated, Dewormed, Sterilized , Health , Quantity , Fee , VideoAmt , PhotoAmt , AgeYears , NumColors)
+```
+
+#predictions of the model witht the cleaned evaluation data
+```{r}
+#predictions
+pred <- predict(model2, evaluation, type = "response")
+summary(pred)
+```
+here we can see the median 0.9812 and the mean 0.9770 based on the evaluation data, this is a really good prediction close the 100, and with running the test we can see the real value of this model.
+
+
+```{r}
+# The predictions variable
+pred_df <- as.data.frame(pred)
+
+#Round the values to 4
+pred_df$values <- round((exp(pred_df$pred)),4)
+
+head(pred_df$values)
+```
+The values here shows the density of the adoption rate is more around 2.65
+
+
+Checking the predictive values for the evaluation data.
+
+```{r}
+# Creating Bar chart for the predictive values.
+ggplot(pred_df, aes(x=values)) + 
+ geom_histogram(aes(y=..density..), colour="black", fill="white")+
+ geom_density(alpha=.2, fill="steelblue")+
+labs(title="Predicted Value",x="Adoption", y = "Density")
+```
+
+We can see that the adoption values is more skewed to the right, the density of the adoption rate is more around 2.5 to 2.75
+
+
+
