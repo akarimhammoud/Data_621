@@ -177,8 +177,14 @@ str(data)
 ```
 
 ## Add Labels 
-Import the color labels to see the names of the colors.
 
+```{r}
+data$Type <- recode_factor(data$Type, "1" = "Dog",
+                           "2"= "Cat")
+```
+
+
+Import the color labels to see the names of the colors.
 ```{r}
 colors <- read.csv('./data/color_labels.csv')
 
@@ -269,8 +275,6 @@ data$FurLength <-recode_factor(data$FurLength,
                                    "3" = "Long")
 ```
 
-#### Uncovering Missing Observations 
-
 Adding labels to `Vaccinated`, `Dewormed`, `Sterilized`. A number of observations in these columns are `Not Sure` which can be interpreted as `NA`. Similarly, the `VideoAmt` variable contains 14419 observations with 0 videos so the 0s have been converted to `NA`.  
 
 Part of the code in the blocks below can be commented out if we want to preserve the `Not Sure` and the 0 values.
@@ -289,9 +293,9 @@ data$Sterilized <-recode_factor(data$Sterilized,
                                    "3" = "Not Sure")
 
 #turns the Not Sure into NAs comment the below out if we want to preserve the Not Sures
-levels(data$Vaccinated)[levels(data$Vaccinated)=='Not Sure'] <- NA
-levels(data$Dewormed)[levels(data$Dewormed)=='Not Sure'] <- NA
-levels(data$Sterilized)[levels(data$Sterilized)=='Not Sure'] <- NA
+#levels(data$Vaccinated)[levels(data$Vaccinated)=='Not Sure'] <- NA
+#levels(data$Dewormed)[levels(data$Dewormed)=='Not Sure'] <- NA
+#levels(data$Sterilized)[levels(data$Sterilized)=='Not Sure'] <- NA
 ```
 
 ```{r}
@@ -300,318 +304,77 @@ table(data$VideoAmt)
 #turns the 0 videoamout to NA 
 data$VideoAmt[data$VideoAmt == 0] <- NA
 ```
-
-## Dog Breed Data *woof*
-
-Lets check how many dog and cat listings we have:
+Converting the `breedname` and `AllMeds` variables to factor since the original data points used to create these were factors.
 ```{r}
-table(data$Type)
+data$breedname <- as.factor(data$breedname)
+
+data$AllMeds <- as.factor(data$AllMeds)
 ```
 
-It looks like we have 1262 more dog listings than cat, with 8132 dog and 6861 cat.
-
-Subset `data` by `Type` to focus on dogs.  
 ```{r}
-dog_data = filter(data, Type == 1)
-dog_data = subset(dog_data, select = -c(Type))
-```
-
-### Dog (data) Wrangling 
-```{r}
-dog_data$breedname <- gsub("Amer ", "American ", dog_data$breedname) 
+data$breedname <- gsub("Amer ", "American ", data$breedname) 
 ```
 
 Next we will collapse duplicate Labrador Retriever factors (Black, Chocolate, and Yellow) into one as they are not considered to be separate [Retriever breeds](https://www.akc.org/expert-advice/dog-breeds/retriever-breeds/). We will also group 4 of the Jack Russell Terrier (Parson Russell Terrier) breeds into Jack Russell Terrier.
 ```{r}
-dog_data$breedname <- fct_collapse(dog_data$breedname, 
+data$breedname <- fct_collapse(data$breedname, 
                                    'Labrador Retriever' = 
                                      c("Black Labrador Retriever",
                                        "Chocolate Labrador Retriever",
                                        "Yellow Labrador Retriever"))
-dog_data$breedname <- fct_collapse(dog_data$breedname,
+data$breedname <- fct_collapse(data$breedname,
                                    'Jack Russell Terrier' = 
                                      "Jack Russell Terrier (Parson Russell Terrier)")
 
 ```
 
-Below are the top 10 breeds where Mixed Breed has a heavy majority with more than half of the dogs being categorized as a mix.
-```{r}
-table(dog_data$breedname) %>% 
-  as.data.frame() %>% 
-  arrange(desc(Freq)) %>% 
-  #top_n(10)
-  subset(Freq!=0)
-```
-
-### Size Label by Breed
-
-When deciding to adopt a new pet a consideration many people have is the size of the dog for a number of reasons. Size plays an important role in a dog's strength and activity level which is a concern for a potential new owner, in addition to space in ones house or if they have a backyard or not. 
-
-Next we bring in the AKC Breed Info table to load details on dog sizes by breed.
-```{r}
-breed_size <- read.csv('./data/TrainingData/AKC Breed Info.csv')
-
-str(breed_size)
-```
-
-Remove one Fox Terrier of the two entries. Both entries have the same size data, only difference is hair type (smooth vs. wire).
-```{r}
-breed_size <- breed_size %>% 
-  slice(-116)
-```
-
-```{r}
-breed_size$BreedName <- recode(breed_size$BreedName, 
-                               "Collie (Rough) & (Smooth)" = "Collie",
-                               "Fox Terrier ‰ÛÒ Wirehair" = "Fox Terrier")
-```
-
-Using the `breed_size` table, a feature can be created using the [American Kennel Club Breeds by Size](https://www.petplace.com/article/dogs/pet-care/american-kennel-club-akc-breeds-by-size/) breakdown.
-
-Alternatively, here is another breed type [breakdown by size](https://citydogslife.com/small-medium-large-dog-size-guide/).
-
-```{r}
-breed_size$avg_weight <- rowMeans(breed_size[,c('weight_low_lbs', 
-                                                'weight_high_lbs')], na.rm=TRUE)
-```
-
-
-Since there are two types of Cocker Spaniels (American and English) in our `breed_size` table, and our `dog_data` has Cocker Spaniel, I took the average of both the American and English to give an idea of what a general Cocker Spaniel might weigh to then be able to classify its size.
-
-```{r}
-#[row,column]
-breed_size$height_low_inches <- as.integer(breed_size$height_low_inches)
-breed_size$height_high_inches <- as.integer(breed_size$height_high_inches)
-
-#cocker spaniel avg
-cs <- sapply(breed_size[c(68,69),],mean)
-breed_size<-rbind(breed_size, cs)
-
-breed_size[150,1] = "Cocker Spaniel"
-breed_size[68,1] ="American Cocker Spaniel"
-breed_size[69,1] ="English Cocker Spaniel"
-
-#poodle avg
-poodle <- sapply(breed_size[c(122,48,147),],mean)
-breed_size<-rbind(breed_size, poodle)
-breed_size[151,1] = "Poodle"
-```
-
-#### Add feature
-
-Create a `size` feature based on breed using `case_when()`^[https://dplyr.tidyverse.org/reference/case_when.html].
-```{r}
-breed_size<- breed_size %>% 
-  mutate(
-    size = case_when(
-      (avg_weight >= 3 & avg_weight < 9) ~ "toy",
-      (avg_weight >= 9 & avg_weight < 35) ~ "small",
-      (avg_weight >= 35 & avg_weight < 65) ~ "medium",
-      (avg_weight >= 65 & avg_weight < 85) ~ "large",
-      (avg_weight >= 85) ~ "giant"
-    )
-  )
-```
-
-
-Now we will `left_join()` ^[https://youtu.be/RKgd-0DdFo8] our `dog_data` with our `breed_size` to bring in the size feature by breed.
-```{r}
-dog_data_merge <- left_join(dog_data, select(breed_size, c(1,7)), 
-                            by=c("breedname" = "BreedName"))
-
-dog_data_merge$size <- as.factor(dog_data_merge$size)
-
-table(dog_data_merge$size) %>% 
-  as.data.frame() %>% 
-  arrange(desc(Freq))
-```
-
-### Hypoallergenic
-
-What is a hypoallergenic dog?  
-
-According to the American College of Allergy, Asthma, and Immunology, as much as 10% of the U.S. population is allergic to dogs. While there are no 100% hypoallergenic dogs, there are many breeds that do well with allergy sufferers. Dander, which is attached to pet hair, is what causes most pet allergies in humans and these dogs have a non-shedding coat that produces less dander.  
-
-So if you are either part of the 10% of the U.s. population that is allergic to dogs or just don't like to have to vacuum dog hair twice a day then a hypoallergenic dog will be more appealing to you than a non-hypoallergenic dog.
-
-#### Add feature
-
-Below we create a dataframe using the list of [hypoallergenic](https://www.akc.org/dog-breeds/hypoallergenic-dogs/) dogs from the American Kennel Club. Once created, we `left_join()` it to our `dog_data_merge` dataframe to add the new feature for analysis.
-
-```{r}
-breed <- c("Affenpinscher", "Afgan Hound", "American Hairless Terrier", 
-                    "Barbado da Terceira", "Bedlington Terrier", "Bichon Frise",
-                    "Bolongese", "Chinese Crested", "Coton de Tulear", 
-                    "Giant Schnauzer", "Irish Water Spaniel", 
-                    "Kerry Blue Terrier","Lagotto Romangnolo", "Lowchen", 
-                    "Maltese","Miniature Shnauzer","Peruvian Inca Orchid", 
-                    "Poodle", "Standard Poodle", "Schnauzer", 
-                    "Portuguese Water Dog", "Russian Tsvetnaya Bolonka", 
-                    "Wheaten Terrier","Xoloitzcuintli", "Yorkshire Terrier"
-                    )
-hypoallergenic <- as.data.frame(breed)
-hypoallergenic$hypoallergenic <- "Yes"
-```
-
-```{r}
-dog_data_merge1 <- left_join(dog_data_merge, hypoallergenic, 
-                             by=c("breedname" = "breed"))
-
-#when breedname = Mixed Breed & NA hypo = NA, all else should be "No" 
-dog_data_merge1$hypoallergenic[is.na(dog_data_merge1$hypoallergenic)] <- "No"
-
-dog_data_merge1$hypoallergenic[which(dog_data_merge1$breedname == "Mixed Breed")] <- NA
-dog_data_merge1$hypoallergenic[which(is.na(dog_data_merge1$breedname))] <- NA
-
-dog_data_merge1$hypoallergenic <- as.factor(dog_data_merge1$hypoallergenic)
-```
-
-How many hypoallergenic and non-hypoallergenic do we have?
-```{r}
-table(dog_data_merge1$hypoallergenic)
-sum(table(dog_data_merge1$hypoallergenic))
-```
-Based on the count, this might not be a good variable to keep in our analysis, but will look into that later in the EDA process.
-
-
-Mixed Breeds and breeds that are NA in the `breedname` column will be NA for `hypoallergenic` as it logically can't be confirmed if they are hypoallergenic or not. In general, there are Mixed Breeds that can be considered hypoallergenic. For example, a dog that is part Poodle (hypoallergenic) and part cavalier King Charles Spaniel (non-hypoallergenic) can be considered hypoallergenic, the resulting pup would is often called Cavapoo or Cavoodle.
-
-How many NA breed do we have?
-```{r}
-table(is.na(dog_data_merge1$breedname))
-```
-How many are Mixed Breed?
-```{r}
-table(dog_data_merge1$breedname=="Mixed Breed")
-```
-
-## Distributions of Numeric Variables
-
-Here we check our data with the added features of `size` and `hypoallergenic`.
-```{r}
-str(dog_data_merge1)
-```
-
-Converting the `breedname` and `AllMeds` variables to factor.
-```{r}
-dog_data_merge1$breedname <- as.factor(dog_data_merge1$breedname)
-
-dog_data_merge1$AllMeds <- as.factor(dog_data_merge1$AllMeds)
-```
-
-Here we are subsetting our numeric predictor variables to check their distributions.
-```{r}
-#subset our 3 vars
-distributions <- dog_data_merge1 %>% 
-  keep(is.numeric)
-```
-
-Next we check if the variables contain any NA values.
-```{r}
-colSums(is.na(distributions))
-```
-
-
-```{r}
-#plot
-distributions %>% 
-  gather(variable, value, 1:5) %>%
-  ggplot(aes(value)) +
-    facet_wrap(~variable, scales = "free") +
-    geom_density(fill = "steelblue", alpha=0.9, color="steelblue") +
-    geom_histogram(aes(y=..density..), alpha=0.2, fill = "lightblue", color="lightblue", position="identity") +
-    theme_minimal()
-```
-```{r}
-#box plots
-distributions %>% 
-  gather() %>%
-  ggplot(aes(value)) +
-  facet_wrap(~ key, scales = "free") +
-  geom_boxplot(fill = "steelblue", color="black", outlier.colour="red", outlier.shape=16,
-             outlier.size=2, notch=FALSE) +
-  theme_minimal()
-```
-
-```{r}
-#stats
-descr(distributions, 
-  headings = FALSE, #remove headings# 
-  transpose = FALSE #TRUE allows for better display due to large amount of variables
-  ) %>% 
-  kbl(caption = "Univariate Descriptive Statistics - Training Data Set") %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
-```
-
-
-### Transformations of numeric variables
-
-Next we will take transformations of the variables reviewed above to see if the transformed variables are worth looking into and using for our model.
-
-#### Log Transformations
-```{r}
-log_distributions <- log(distributions + 1)
-
-# Histograms of log transformed numeric variables
-log_distributions %>%
-  gather(variable, value, 1:5) %>%
-  ggplot(., aes(value)) + 
-  geom_density(fill = "steelblue", color="steelblue") + 
-  facet_wrap(~variable, scales ="free", ncol = 3) +
-  labs(x = element_blank(), y = element_blank()) +
-  theme_minimal()
-```
-  
-#### Square Root transformations
-```{r}
-sqrt_distributions <- sqrt(distributions)
-
-sqrt_distributions %>% 
-  gather(variable, value, 1:5) %>%
-  ggplot(., aes(value)) + 
-  geom_density(fill = "steelblue", color="steelblue") + 
-  facet_wrap(~variable, scales ="free", ncol = 3) +
-  labs(x = element_blank(), y = element_blank()) +
-  theme_minimal()
-```
-  
-#### Cube root transformations
-```{r}
-cbrt_distributions <- (distributions)^(1/3)
-
-cbrt_distributions %>% 
-  gather(variable, value, 1:5) %>%
-  ggplot(., aes(value)) + 
-  geom_density(fill = "steelblue", color="steelblue") + 
-  facet_wrap(~variable, scales ="free", ncol = 3) +
-  labs(x = element_blank(), y = element_blank()) +
-  theme_minimal()
-```
-
-Based on the above, all variables are still heavily right skewed with the exception of `PhotoAmt` which made some improvement, but still not normally distributed. 
 
 
 ## Exploratory Data Analysis
 
+Next we will check our dataset to see if the new variables are worth keeping and detect other missing data.
 ```{r}
-#copy of data
-train_data <- dog_data_merge1
-```
-
-```{r}
-train_data <- train_data %>% 
+#remove duplicate variables
+data <- data %>% 
   select(-c(Breed1, Color1, Color2, Color3))
 
-str(train_data)
+str(data)
 ```
+### Visualizing missing data
+
+```{r fig.height=7, fig.width=10}
+map(data, ~sum(is.na(.))) %>% t()
+missmap(data, main = "Missing vs Observed Values")
+```
+
+After making this visualization, it is best to remove the variables `VideoAmt`, `ColorName2`, and `ColorName3`.
+
+```{r}
+#make copy
+train_data <- data
+#remove NA
+train_data <-train_data %>% 
+  select(-c(VideoAmt,ColorName2,ColorName3))
+```
+
+```{r}
+map(train_data, ~sum(is.na(.))) %>% t()
+missmap(train_data, main = "Missing vs Observed Values")
+```
+
+
 ### Dog Breed Word Cloud
 
 Below we use `wordcloud` to visualize the dog breeds in our data. Note the Mixed Breed has been removed as it was skewing our data with the highest number of observations with 5923 total.
 
 ```{r}
 set.seed(123)
-wordtable <- table(train_data$breedname) %>% 
+dogs <- train_data %>% 
+  filter(Type== "Dog")
+
+wordtable <- table(dogs$breedname) %>% 
   as.data.frame() %>% 
+  filter(Freq >0) %>% 
   arrange(desc(Freq)) %>% 
   slice(c(-1))
 
@@ -619,6 +382,25 @@ wordcloud(words = wordtable$Var1, freq = wordtable$Freq,
           max.words=250,random.order=FALSE, scale=c(2,.8),
           rot.per=0.1, colors=brewer.pal(8, "Dark2"))
 ```
+
+### Cat Breed Word Cloud
+
+Below we use `wordcloud` to visualize the cat breeds in our data.
+```{r}
+set.seed(456)
+cats <- train_data %>% 
+  filter(Type== "Cat")
+
+wordtable2 <- table(cats$breedname) %>% 
+  as.data.frame() %>% 
+  filter(Freq >0) %>% 
+  arrange(desc(Freq)) 
+
+wordcloud(words = wordtable2$Var1, freq = wordtable$Freq,
+          max.words=250,random.order=FALSE, scale=c(2,.8),
+          rot.per=0.1, colors=brewer.pal(8, "Dark2"))
+```
+
 
 ### Bar plots
 
@@ -681,18 +463,101 @@ train_data %>%
   theme_minimal()
 ```
 
-### Visualizing missing data
+### Distributions of Numeric Variables
 
-```{r fig.height=7, fig.width=10}
-map(train_data, ~sum(is.na(.))) %>% t()
-missmap(train_data, main = "Missing vs Observed Values")
+Here we are subsetting our numeric predictor variables to check their distributions.
+```{r}
+#subset our 3 vars
+distributions <- train_data %>% 
+  keep(is.numeric)
 ```
 
-After making this visualization, it is best to remove the variables `hypoallergenic` and `size` created earlier as a great amount of observations are `NA` as well as `VideoAmt` and `ColorName3`.
+Next we check if the variables contain any NA values.
+```{r}
+colSums(is.na(distributions))
+```
+
+```{r}
+#plot
+distributions %>% 
+  gather(variable, value, 1:4) %>%
+  ggplot(aes(value)) +
+    facet_wrap(~variable, scales = "free") +
+    geom_density(fill = "steelblue", alpha=0.9, color="steelblue") +
+    geom_histogram(aes(y=..density..), alpha=0.2, fill = "lightblue", color="lightblue", position="identity") +
+    theme_minimal()
+```
+```{r}
+#box plots
+distributions %>% 
+  gather() %>%
+  ggplot(aes(value)) +
+  facet_wrap(~ key, scales = "free") +
+  geom_boxplot(fill = "steelblue", color="black", outlier.colour="red", outlier.shape=16,
+             outlier.size=2, notch=FALSE) +
+  theme_minimal()
+```
+
+```{r}
+#stats
+descr(distributions, 
+  headings = FALSE, #remove headings# 
+  transpose = FALSE #TRUE allows for better display due to large amount of variables
+  ) %>% 
+  kbl(caption = "Univariate Descriptive Statistics - Training Data Set") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+
+### Transformations of numeric variables
+
+Next we will take transformations of the variables reviewed above to see if the transformed variables are worth looking into and using for our model.
+
+#### Log Transformations
+```{r}
+log_distributions <- log(distributions + 1)
+
+# Histograms of log transformed numeric variables
+log_distributions %>%
+  gather(variable, value, 1:4) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 2) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+  
+#### Square Root transformations
+```{r}
+sqrt_distributions <- sqrt(distributions)
+
+sqrt_distributions %>% 
+  gather(variable, value, 1:4) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 2) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+  
+#### Cube root transformations
+```{r}
+cbrt_distributions <- (distributions)^(1/3)
+
+cbrt_distributions %>% 
+  gather(variable, value, 1:4) %>%
+  ggplot(., aes(value)) + 
+  geom_density(fill = "steelblue", color="steelblue") + 
+  facet_wrap(~variable, scales ="free", ncol = 2) +
+  labs(x = element_blank(), y = element_blank()) +
+  theme_minimal()
+```
+
+Based on the above, all variables are still heavily right skewed with the exception of `PhotoAmt` which made some improvement, but still not normally distributed. 
 
 ### Correlation Plot
 
-*This come after removing the variables with a lot of NA, need to remove vars still*
+
 ```{r}
 numeric_values <- train_data 
 numeric_values$AdoptionSpeed <- as.numeric(numeric_values$AdoptionSpeed)
@@ -704,8 +569,6 @@ train_cor <- cor(numeric_values)
 corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", lower="circle")
 
 ```
-
-
 
 ###Output an updated csv 
 ```{r}
