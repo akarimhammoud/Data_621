@@ -77,6 +77,10 @@ library(stats)
 library(GGally)
 library(wordcloud)
 library(Amelia)
+library(MASS)
+library(Hmisc)
+library(foreign)
+library(reshape2)
 ```
 
 ### Load Data
@@ -171,7 +175,6 @@ data <- transform(
 )
 ```
 
-
 ```{r}
 str(data)
 ```
@@ -203,10 +206,10 @@ levels(data$Color2)
 levels(data$Color3)
 ```
 
-Creating new variables to name the colors.
+Add labels to the colors.
 
 ```{r}
-data$ColorName1 <- recode_factor(data$Color1,"1"= "Black", 
+data$Color1 <- recode_factor(data$Color1,"1"= "Black", 
                                 "2"= "Brown", 
                                 "3"= "Golden", 
                                 "4"= "Yellow", 
@@ -217,7 +220,7 @@ data$ColorName1 <- recode_factor(data$Color1,"1"= "Black",
 ```
 
 ```{r}
-data$ColorName2 <- recode_factor(data$Color2, "0" = "NA",
+data$Color2 <- recode_factor(data$Color2, "0" = "NA",
                                 "2"= "Brown", 
                                 "3"= "Golden", 
                                 "4"= "Yellow", 
@@ -227,7 +230,7 @@ data$ColorName2 <- recode_factor(data$Color2, "0" = "NA",
 ```
 
 ```{r}
-data$ColorName3 <- recode_factor(data$Color3, "0" = "NA",
+data$Color3 <- recode_factor(data$Color3, "0" = "NA",
                                 "3"= "Golden", 
                                 "4"= "Yellow", 
                                 "5"= "Cream", 
@@ -328,6 +331,11 @@ data$breedname <- fct_collapse(data$breedname,
 
 ```
 
+```{r}
+data$purebreed <- ifelse(data$breedname != "Mixed Breed", "Yes", "No")
+
+data$purebreed<-  as.factor(data$purebreed)
+```
 
 
 ## Exploratory Data Analysis
@@ -336,7 +344,7 @@ Next we will check our dataset to see if the new variables are worth keeping and
 ```{r}
 #remove duplicate variables
 data <- data %>% 
-  select(-c(Breed1, Color1, Color2, Color3))
+  dplyr::select(-c(Breed1))
 
 str(data)
 ```
@@ -354,7 +362,7 @@ After making this visualization, it is best to remove the variables `VideoAmt`, 
 train_data <- data
 #remove NA
 train_data <-train_data %>% 
-  select(-c(VideoAmt,ColorName2,ColorName3))
+  dplyr::select(-c(VideoAmt,Color2,Color3))
 ```
 
 ```{r}
@@ -401,7 +409,6 @@ wordcloud(words = wordtable2$Var1, freq = wordtable$Freq,
           rot.per=0.1, colors=brewer.pal(8, "Dark2"))
 ```
 
-
 ### Bar plots
 
 As part of exploring the data, below we look into our response variable and see which level of `AdoptionSpeed` has the most occurrences.   
@@ -419,14 +426,16 @@ The values are determined in the following way:
 
 Below we see that most dogs don't get adopted after 100 days of being listed. The next highest level would be adoption within the first month of listing.
 ```{r}
+
+#fct_reorder(factor(AdoptionSpeed),Count
 train_data %>% 
   group_by(AdoptionSpeed) %>%
   summarise(Count = length(AdoptionSpeed)) %>% 
-  ggplot(aes(x=fct_reorder(factor(AdoptionSpeed),Count), 
+  ggplot(aes(x=(AdoptionSpeed), 
              y= Count))+
   geom_col(position="dodge", fill= "steelblue")+
-  geom_text(aes(label = Count, hjust = 1))+
-  coord_flip()+
+  geom_text(aes(label = Count, vjust = 1))+
+  #coord_flip()+
   labs(x= "Adoption Speed", y = "Count")+
   theme_minimal()
 
@@ -569,6 +578,67 @@ train_cor <- cor(numeric_values)
 corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", lower="circle")
 
 ```
+
+## Build Model
+
+```{r}
+train_data$euth_risk<- fct_collapse(train_data$AdoptionSpeed,
+                              'Low' = c("0", "1"),
+                              'Medium' = c("2","3"),
+                              'High' = "4")
+levels(train_data$euth_risk)
+
+
+```
+
+```{r}
+#removing breedname as it has too many factor levels
+train_data <- train_data %>% 
+  dplyr::select(-breedname)
+```
+
+
+```{r}
+str(train_data)
+```
+
+
+```{r}
+null_model <- polr(AdoptionSpeed ~ 1 , train_data, Hess=TRUE)
+
+summary(null_model)
+```
+
+```{r}
+model <- polr(AdoptionSpeed ~ Type+Gender+purebreed, 
+              train_data, 
+              Hess=TRUE)
+
+summary(model)
+```
+```{r}
+(ctable <- coef(summary(model)))
+```
+
+```{r}
+## calculate and store p values
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+
+## combined table
+(ctable <- cbind(ctable, "p value" = p))
+```
+
+```{r}
+(ci <- confint(model)) # default method gives profiled CIs
+```
+```{r}
+confint.default(model)
+```
+```{r}
+## odds ratios
+exp(coef(model))
+```
+
 
 ###Output an updated csv 
 ```{r}
