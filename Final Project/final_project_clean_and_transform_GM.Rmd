@@ -81,12 +81,15 @@ library(MASS)
 library(Hmisc)
 library(foreign)
 library(reshape2)
+library(splines)
+library(car)
+library(effects)
 ```
 
 ### Load Data
 Load the data
-```{r echo=FALSE}
-# load data
+```{r}
+# load data https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TrainingData/traindatawithbreedname.csv
 data <- read.csv('./data/TrainingData/traindatawithbreedname.csv')
 #data <- read.csv('./data/TestData/test.csv')
 head(data,2)
@@ -569,7 +572,6 @@ Based on the above, all variables are still heavily right skewed with the except
 
 ```{r}
 numeric_values <- train_data 
-numeric_values$AdoptionSpeed <- as.numeric(numeric_values$AdoptionSpeed)
 
 numeric_values<- numeric_values %>% 
   select_if(is.numeric)
@@ -581,14 +583,13 @@ corrplot.mixed(train_cor, tl.col = 'black', tl.pos = 'lt', upper = "number", low
 
 ## Build Model
 
+Below we create a new feature based on the response variable `euth_risk`, which is a tri-level variable to condense the original `AdoptionSpeed`.  ^[https://www.nature.com/articles/s41598-021-87649-2] ^[https://bmcvetres.biomedcentral.com/articles/10.1186/s12917-020-02728-2]
 ```{r}
 train_data$euth_risk<- fct_collapse(train_data$AdoptionSpeed,
                               'Low' = c("0", "1"),
                               'Medium' = c("2","3"),
                               'High' = "4")
 levels(train_data$euth_risk)
-
-
 ```
 
 ```{r}
@@ -599,46 +600,135 @@ train_data <- train_data %>%
 
 
 ```{r}
-str(train_data)
+summary(train_data)
+```
+
+```{r}
+install.packages("ggpubr")
+library(ggpubr)
+```
+
+```{r fig.height=8, fig.width=10}
+ggplot(train_data, aes(x = euth_risk, y = AgeYears, fill = euth_risk)) +
+  geom_boxplot(size = .75) +   facet_grid(MaturitySize ~ Gender, margins = FALSE) +   
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 ```
 
 
 ```{r}
-null_model <- polr(AdoptionSpeed ~ 1 , train_data, Hess=TRUE)
+null_model2 <- polr(AdoptionSpeed ~ 1 , train_data, Hess=TRUE)
+
+summary(null_model2)
+```
+
+```{r}
+null_model <- polr(euth_risk ~ 1 , train_data, Hess=TRUE)
 
 summary(null_model)
 ```
 
 ```{r}
-model <- polr(AdoptionSpeed ~ Type+Gender+purebreed, 
+model_1 <- polr(euth_risk~ Type+(Gender+Color1+MaturitySize+
+                                 FurLength+Health+Quantity+
+                                 Fee+PhotoAmt+AgeYears+
+                                 NumColors+purebreed+
+                                 Vaccinated+Dewormed+Sterilized), 
               train_data, 
               Hess=TRUE)
 
-summary(model)
+summary(model_1)
 ```
+
+### Assumptions: Detecting Multicollinearity
+The R function vif() [car package] can be used to detect multicollinearity^[http://www.sthda.com/english/articles/39-regression-model-diagnostics/160-multicollinearity-essentials-and-vif-in-r/] in a regression model:
 ```{r}
-(ctable <- coef(summary(model)))
+car::vif(model_1)
+```
+### Dealing with multicollinearity
+In this section, we’ll update our model by removing the the predictor variables with high VIF values:
+
+VIF score for the predictor variables `Vaccinated` and `Dewormed` is high (VIF = 7.0, 6.2). This might be problematic. As such we will remove them and replace the two with `AllMeds` Since the `AllMeds` variable is a combination of `Vaccinated`, `Dewormed`, and `Steriliezed`, `Sterilized` will also be removed.
+
+```{r}
+model_2 <- polr(euth_risk~ Type+(Gender+Color1+MaturitySize+
+                                 FurLength+Health+Quantity+
+                                 Fee+PhotoAmt+AgeYears+
+                                 NumColors+purebreed+
+                                 AllMeds), 
+              train_data, 
+              Hess=TRUE)
+
+summary(model_2)
 ```
 
 ```{r}
-## calculate and store p values
-p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
-
-## combined table
-(ctable <- cbind(ctable, "p value" = p))
+car::vif(model_2)
+```
+### P-values
+The polr function doesn't include the p values, as such we need to manually create them as shown below.
+```{r}
+summary_table <- coef(summary(model_2))
+pval <- pnorm(abs(summary_table[, "t value"]),lower.tail = FALSE)* 2
+summary_table <- cbind(summary_table, "p value" = round(pval,3))
+summary_table
 ```
 
+Here we run another model since there were a number of insignificant variables with high p values.
 ```{r}
-(ci <- confint(model)) # default method gives profiled CIs
+model_3 <- polr(euth_risk~ Type+FurLength+Quantity+
+                                 Fee+PhotoAmt+AgeYears+
+                                 NumColors+purebreed+
+                                 AllMeds, 
+              train_data, 
+              Hess=TRUE)
+
+summary(model_3)
 ```
 ```{r}
-confint.default(model)
+summary_table <- coef(summary(model_3))
+pval <- pnorm(abs(summary_table[, "t value"]),lower.tail = FALSE)* 2
+summary_table <- cbind(summary_table, "p value" = round(pval,3))
+summary_table
 ```
+
+Once again, we repeat the process of removing one variable for due to the p values obeserved.
 ```{r}
-## odds ratios
+model_4 <- polr(euth_risk~ Type+FurLength+Quantity+
+                                 Fee+PhotoAmt+AgeYears+purebreed+
+                                 AllMeds, 
+              train_data, 
+              Hess=TRUE)
+
+summary(model_4)
+```
+
+```{r}
+summary_table <- coef(summary(model_4))
+pval <- pnorm(abs(summary_table[, "t value"]),lower.tail = FALSE)* 2
+summary_table <- cbind(summary_table, "p value" = round(pval,3))
+summary_table
+```
+
+### Odds Ratios
+These coefficients are called proportional odds ratios and we would interpret these pretty much as we would odds ratios from a binary logistic regression.
+```{r}
 exp(coef(model))
 ```
 
+
+```{r}
+Anova(model)
+Anova(model3)
+```
+
+### Assumptions: Proportional Odds ^[https://www.st-andrews.ac.uk/media/ceed/students/mathssupport/ordinal%20logistic%20regression.pdf]
+Brant Test ^[https://cehs-research.github.io/eBook_regression/ordered-logistic-regression-ex-spaking.html#assumptions-1]
+The `poTest` function implements tests proposed by Brant (1990) for proportional odds for logistic models fit by the polr() function in the MASS package.
+```{r}
+car::poTest(model3)
+```
+
+A significant test statistics provides evidence that the parallel regression assumption has been violated!
 
 ###Output an updated csv 
 ```{r}
