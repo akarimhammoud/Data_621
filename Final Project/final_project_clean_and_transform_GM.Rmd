@@ -47,21 +47,15 @@ There are millions of stray pets around the world, some of which are fortunate e
 Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
 
 The values are determined in the following way:
-0 - Pet was adopted on the same day as it was listed.
-1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
-2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
-3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
-4 - No adoption after 100 days of being listed.
 
-## This Notebook...
-The data has no missing values, but there are a number of features in text that need to be converted to some numeric value. This notebook performs those changes.
+- 0 - Pet was adopted on the same day as it was listed.
+- 1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
+- 2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
+- 3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+- 4 - No adoption after 100 days of being listed.
 
-```{r message=FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(message = FALSE)
-knitr::opts_chunk$set(warning = FALSE)
-```
 
+## Packages
 ```{r message=FALSE, warning=FALSE}
 library(dplyr)
 library(reshape)
@@ -86,8 +80,8 @@ library(car)
 library(effects)
 ```
 
-### Load Data
-Load the data
+## Load Data
+
 ```{r}
 # load data https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TrainingData/traindatawithbreedname.csv
 data <- read.csv('./data/TrainingData/traindatawithbreedname.csv')
@@ -95,18 +89,20 @@ data <- read.csv('./data/TrainingData/traindatawithbreedname.csv')
 head(data,2)
 ```
 
-## Missing Values Count 
+## Data Cleaning and Feature Engineering
+
+### Missing Values Count 
 There are no missing values
 ```{r}
 map(data, ~sum(is.na(.))) %>% t()
 ```
 
-## Show the type of each data
+### Show the type of each data
 ```{r}
 str(data)
 ```
 
-## New features
+### New features
 AgeYears - provided in months this is too many variations.  Decided to convert to new feature of AgeYears and drop Age
 ```{r}
 data$AgeYears = round(data$Age/12, 0)
@@ -182,7 +178,7 @@ data <- transform(
 str(data)
 ```
 
-## Add Labels 
+### Add Labels 
 
 ```{r}
 data$Type <- recode_factor(data$Type, "1" = "Dog",
@@ -569,7 +565,6 @@ Based on the above, all variables are still heavily right skewed with the except
 
 ### Correlation Plot
 
-
 ```{r}
 numeric_values <- train_data 
 
@@ -603,10 +598,6 @@ train_data <- train_data %>%
 summary(train_data)
 ```
 
-```{r}
-install.packages("ggpubr")
-library(ggpubr)
-```
 
 ```{r fig.height=8, fig.width=10}
 ggplot(train_data, aes(x = euth_risk, y = AgeYears, fill = euth_risk)) +
@@ -614,7 +605,13 @@ ggplot(train_data, aes(x = euth_risk, y = AgeYears, fill = euth_risk)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 ```
 
+### ORDINAL LOGISTIC REGRESSION
 
+The following models will be created using ordinal logisitic regression given the nature of the response variable as it can be considered an ordinal factor. ^[https://stats.idre.ucla.edu/r/dae/ordinal-logistic-regression/]  
+
+#### Selecting an ordered variable
+
+Below we run two null models, one with our original response variable `AdoptionSpeed`, and one with our created response variable `euth_risk`.
 ```{r}
 null_model2 <- polr(AdoptionSpeed ~ 1 , train_data, Hess=TRUE)
 
@@ -626,6 +623,12 @@ null_model <- polr(euth_risk ~ 1 , train_data, Hess=TRUE)
 
 summary(null_model)
 ```
+AIC is used to compare different possible models and determine which one is the best fit for the data. By itself, the AIC score is not of much use unless it is compared with the AIC score of a competing model.  
+
+The model with the lower AIC score is expected to strike a superior balance between its ability to fit the data set and its ability to avoid over-fitting the data set. ^[https://timeseriesreasoning.com/contents/akaike-information-criterion/]  
+
+
+Using the AIC value, we see the model using the `euth-risk` may be a better fit.
 
 ```{r}
 model_1 <- polr(euth_risk~ Type+(Gender+Color1+MaturitySize+
@@ -712,28 +715,98 @@ summary_table
 ### Odds Ratios
 These coefficients are called proportional odds ratios and we would interpret these pretty much as we would odds ratios from a binary logistic regression.
 ```{r}
-exp(coef(model))
+exp(coef(model_2))
 ```
 
+### Model Selection
+After dealing with multicollinarity and insignificant values, we see that the model with the lowest AIC value of the models created is `model_2` with an AIC of 29952.42.
 
 ```{r}
-Anova(model)
-Anova(model3)
+hist(model_2$fitted.values, main = " Histogram ",xlab = "Fitted models", col = 'skyblue3')
 ```
 
 ### Assumptions: Proportional Odds ^[https://www.st-andrews.ac.uk/media/ceed/students/mathssupport/ordinal%20logistic%20regression.pdf]
 Brant Test ^[https://cehs-research.github.io/eBook_regression/ordered-logistic-regression-ex-spaking.html#assumptions-1]
 The `poTest` function implements tests proposed by Brant (1990) for proportional odds for logistic models fit by the polr() function in the MASS package.
 ```{r}
-car::poTest(model3)
+car::poTest(model_2)
 ```
 
-A significant test statistics provides evidence that the parallel regression assumption has been violated!
+A significant test statistic provides evidence that the parallel regression assumption has been violated.
 
-###Output an updated csv 
+
+## Predictions
 ```{r}
-#write.csv(data, './data/TrainingData/train_cleaned.csv',row.names = FALSE)
-#write.csv(data, './data/TestData/test_cleaned.csv',row.names = FALSE)
+evaluation <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TestData/test_cleaned.csv")
+```
+
+```{r include=FALSE}
+#Gender+Color1+MaturitySize+FurLength+Health+Quantity+Fee+PhotoAmt+AgeYears+NumColors+purebreed+Vaccinated+Dewormed+Sterilized
+
+evaluation$AllMeds = evaluation$Vaccinated + evaluation$Dewormed + evaluation$Sterilized
+
+evaluation$Color1 <- recode_factor(evaluation$Color1,"1"= "Black", 
+                                "2"= "Brown", 
+                                "3"= "Golden", 
+                                "4"= "Yellow", 
+                                "5"= "Cream", 
+                                "6"= "Gray", 
+                                "7"= "White")
+
+evaluation$Type <- recode_factor(evaluation$Type, 
+                                 "1" = "Dog",
+                                 "2"= "Cat")
+
+#data$GenderLabel
+evaluation$Gender <- recode_factor(evaluation$Gender, 
+                                  "1" = "Male",
+                                  "2" = "Female",
+                                  "3" = "Mixed")
+
+evaluation$MaturitySize <- recode_factor(evaluation$MaturitySize, "1" = "Small", 
+                                   "2" = "Medium",
+                                   "3" = "Large",
+                                   "4" = "Extra Large")
+
+#1 = Healthy, 2 = Minor Injury, 3 = Serious Injury, 0 = Not Specified
+evaluation$Health <-recode_factor(evaluation$Health, 
+                                   "1" = "Healthy", 
+                                   "2" = "Minor Injury", 
+                                   "3" = "Serious Injury")
+
+#FurLength - Fur length (1 = Short, 2 = Medium, 3 = Long, 0 = Not Specified)
+evaluation$FurLength <-recode_factor(evaluation$FurLength, 
+                                   "1" = "Short", 
+                                   "2" = "Medium", 
+                                   "3" = "Long")
+
+evaluation$purebreed <- ifelse(evaluation$Breed1 != 307, "Yes", "No")
+evaluation$purebreed <-  as.factor(evaluation$purebreed)
+
+evaluation$NumColors <- as.factor(evaluation$NumColors)
+evaluation$AllMeds <- as.factor(evaluation$AllMeds)
+
+evaluation$AgeYears <- as.numeric(evaluation$AgeYears)
+
+evaluation = subset(evaluation, select = -c(Breed1, Color2, Color3, 
+                                            Vaccinated, Dewormed, Sterilized, 
+                                            State, VideoAmt))
+```
+After cleaning and selecting the `evalutaion` correpsonding to our `train_data` used in `model_2`, we have:
+```{r}
+str(evaluation)
 ```
 
 
+Below we generate our predictions with the `predict` function ^[https://towardsdatascience.com/implementing-and-interpreting-ordinal-logistic-regression-1ee699274cf5].
+```{r}
+pred <- predict(model_2, evaluation, type = "p")
+
+head(pred, 1)
+```
+
+This model predicts that our Evaluation_Pet will be a medium risk of being euthanized where it will adopted in either months 1, 2 or 3 of being listed.
+
+
+_____
+## References
