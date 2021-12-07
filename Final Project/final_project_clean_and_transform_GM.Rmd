@@ -805,8 +805,13 @@ pred <- predict(model_2, evaluation, type = "p")
 head(pred, 1)
 ```
 
-This model predicts that our Evaluation_Pet will be a medium risk of being euthanized where it will adopted in either months 1, 2 or 3 of being listed.
+This model predicts that our Evaluation_Pet will be a medium risk of euthanasia where it will adopted in either months 1, 2 or 3 of being listed.
 
 
 _____
 ## References
+[5.3 Key Assumptions of Ordinal Regression](https://www.restore.ac.uk/srme/www/fac/soc/wie/research-new/srme/modules/mod5/3/index.html)  
+[Ordinal Logistic Regression and its Assumptions — Full Analysis](https://medium.com/evangelinelee/ordinal-logistic-regression-on-world-happiness-report-221372709095)  
+[Chapter 12 Ordinal Logistic Regression](https://bookdown.org/chua/ber642_advanced_regression/ordinal-logistic-regression.html)  
+[Fitting and Interpreting a Proportional Odds Model](https://data.library.virginia.edu/fitting-and-interpreting-a-proportional-odds-model/)  
+[How to Perform Ordinal Logistic Regression in R](https://www.r-bloggers.com/2019/06/how-to-perform-ordinal-logistic-regression-in-r/)
