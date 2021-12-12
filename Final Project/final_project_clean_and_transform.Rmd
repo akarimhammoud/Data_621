@@ -150,9 +150,11 @@ correlations <- function(data) {
   colnames_vector <- colnames(data)
   
   for(i in 1:ncol(data)) {
-    
-    res <- cor.test(data[ , i], data$AdoptionSpeed, 
-                      method = "pearson")
+    print(i)
+    print(data[,i])
+    res <- cor.test(data[ , i], 
+                    data$AdoptionSpeed, 
+                    method = "pearson")
     
     res_round = abs(round(res$estimate,4))
     
@@ -173,7 +175,8 @@ correlations <- function(data) {
 #Dogs and Cats: each feature's correlation to AdoptionSpeed
 corrdf_sort = correlations(data)
 ggplot(corrdf_sort, aes(x=reorder(colnames_vector,res_vector), y=res_vector)) +
-  geom_bar(stat="identity") + ggtitle("Correlations to Adoption Speed - Dogs and Cats") +
+  geom_bar(stat="identity") + 
+  ggtitle("Correlations to Adoption Speed - Dogs and Cats") +
   theme(axis.text.x = element_text(angle = 90, size = 10))
 ```
 

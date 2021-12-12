@@ -78,76 +78,17 @@ source(here("R","partition_train_test_data.R"),
 
 #### Function to create RF confusion matrix
 ```{r}
-create_rf_confusion_matrix <- function(pred, test){
-  
-  #Creates vectors having data points
-  AdoptionSpeed_test = as.numeric(unlist(test$AdoptionSpeed))
-  expected_value <- factor(c(AdoptionSpeed_test))
-  
-  predicted_value <- factor(c(pred))
- 
-  #Creating confusion matrix
-  rf_confusion_matrix <- confusionMatrix(data=predicted_value, reference = expected_value, positive='1')
- 
-  #Results 
-  return(rf_confusion_matrix)
-}
+source(here('R', 'create_rf_confusion_matrix.R'))
 ```
 
 #### Function to create RF Model
 ```{r}
-rf_model_func <- function(data) {
-  #train, test data for RF model 1
-  rf_train = create_train_data(data)
-  rf_test = create_test_data(data)
-  
-  #create RF model 1
-  rf <- randomForest(
-    AdoptionSpeed ~ .,
-    data=rf_train
-  )
-    
-  #Predict AdoptionSpeed with RF model 1
-  rf_pred = predict(rf, newdata=rf_test)
-  
-  #Create a confusion matrix for RF model 1
-  rf_confusion_matrix = create_rf_confusion_matrix(rf_pred, rf_test)
-  return(rf_confusion_matrix)
-}
+source(here('R','rf_model_func.R'))
 ```
 
 #### Function to create XG Boost model
 ```{r}
-xg_model_func <- function(data) {
-  #train, test data for XG model 1
-  xg_train = as.matrix(create_train_data(data))
-  xg_test = as.matrix(create_test_data(data))
-  
-  #separate out the label
-  adoption_speed_train = xg_train[ , ncol(xg_train)]
-  adoption_speed_test = xg_test[ , ncol(xg_test)]
-  
-  #drop AdoptionSpeed from train and test
-  xg_train = subset(xg_train, select=-c(ncol(xg_train)))
-  xg_test = subset(xg_test, select=-c(ncol(xg_test)))
-  
-  #XGBoost requires a dgc matrix
-  xg_train=as(xg_train, "dgCMatrix")
-  xg_test=as(xg_test, "dgCMatrix")
-  
-  #Create the model
-  xg <- xgboost(data = xg_train, label = adoption_speed_train, nrounds = 300, verbose=0)
-  
-  #Predict
-  xg_pred <- predict(xg, xg_test)
-  
-  #Create a confusion matrix for XG model 1
-  xg_pred = factor(as.integer(xg_pred))
-  adoption_speed_test = factor(as.integer(adoption_speed_test))
-  
-  xg_confusion_matrix = confusionMatrix(xg_pred, adoption_speed_test)
-  return(xg_confusion_matrix)
-}
+source(here('R','xg_model_func.R'))
 ```
 
 ### RandomForest (RF)

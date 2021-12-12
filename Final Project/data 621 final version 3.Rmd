@@ -1,0 +1,321 @@
+---
+title: "FinalFinal1"
+author: "Maliat I"
+date: "12/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+## R Markdown
+
+### Overview
+There are millions of stray pets around the world, some of which are fortunate enough to be adopted while many others are not.  While adoption of a pet is often the definition of success, the rate at which a pet is adopted is also a key success factor - pets that take a long time to adopt contribute to over-crowded animal shelters and can prevent taking on new strays.  Sadly, pets that are not adopted eventually need to be euthanized.
+
+### Learn more about the data
+[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
+
+### What to Predict
+Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
+
+The values are determined in the following way:
+0 - Pet was adopted on the same day as it was listed.
+1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
+2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
+3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+4 - No adoption after 100 days of being listed.
+
+### This Notebook...
+The data has no missing values, but there are a number of features in text that need to be converted to some numeric value.  This notebook performs those changes.
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r}
+library(dplyr)
+library(reshape)
+library(ggplot2)
+library(purrr)
+library(psych)
+library(tidyr)
+```
+
+```{r}
+library(scales)
+```
+
+
+### Load Data
+Load the data
+```{r echo=FALSE}
+# load data
+data <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TrainingData/train.csv")
+#data <- read.csv("C:\\Users\\malia\\OneDrive\\Desktop\\MSDSDATA621\\Data_621\\Final Project\\data\\TestData\\test.csv\")
+head(data,2)
+```
+### Missing Values Count 
+There are no missing values
+```{r}
+map(data, ~sum(is.na(.))) %>% t()
+```
+
+
+### Show the type of each data
+```{r}
+str(data)
+```
+
+
+
+### Adoption rate
+### It can be observed that the rate of not getting adopted after 100 days of being listed is more frequent. 
+
+```{r}
+
+ data %>%
+  ggplot(aes(x= AdoptionSpeed, fill = AdoptionSpeed)) +
+  geom_bar(stat = "count", color = "black") +
+  theme_minimal() +
+  theme(axis.title.y = element_blank()) +
+  scale_y_continuous(labels = comma) +
+  scale_fill_brewer(palette="blue") +
+  theme(legend.position = "top") 
+```
+### Exploration
+```{r}
+library(tidyverse)
+library(jsonlite)
+library(scales)
+library(lubridate)
+library(repr)
+library(ggrepel)
+library(gridExtra)
+library(tidytext)
+library(grid)
+library(rjson)
+library(xgboost)
+library(caret)
+library(Metrics)
+library(Ckmeans.1d.dp)
+
+
+```
+
+```{r}
+library(dplyr)
+train <- read_csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TrainingData/train.csv")
+test <- read_csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TestData/test.csv")
+state_labels <- read_csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/state_labels.csv")
+breed_labels <- read_csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TrainingData/breed_labels.csv")
+color_labels <- read_csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/color_labels.csv")
+tr_te <- bind_rows(train, test)
+
+
+train <- left_join(train, breed_labels %>%dplyr:: select(Breed1=BreedID, MainBreed=BreedName), by="Breed1")
+train <- left_join(train, breed_labels %>%dplyr:: select(Breed2=BreedID, SecondBreed=BreedName), by="Breed2")
+train <- left_join(train, color_labels %>%dplyr:: select(Color1=ColorID, ColorName1=ColorName), by="Color1")
+train <- left_join(train, color_labels %>% dplyr::select(Color2=ColorID, ColorName2=ColorName), by="Color2")
+train <- left_join(train, color_labels %>% dplyr::select(Color3=ColorID, ColorName3=ColorName), by="Color3")
+
+train <- train %>% dplyr::select(-State, -Breed1, -Breed2, - Color1, -Color2, -Color3)
+
+train <- train %>% mutate_at(vars(Type, Gender, AdoptionSpeed), as.factor)
+train <- train %>% mutate(Type=recode(Type, "1"= "Dog", "2"= "Cat"),
+                         Gender=recode(Gender, "1"= "Male", "2" = "Female", "3"= "Mixed"),
+                         AdoptionSpeed=recode(AdoptionSpeed,
+                                              "0"= "0 - Adopted on the same day",
+                                              "1" = "1 - Adopted between 1 and 7 days",
+                                              "2" = "2 - Adopted between 8 and 30 days",
+                                             "3" = "3 - Adopted between 31 and 90 days",
+                                            "4" = "4 - No adoption after 100 days"))
+train <- train %>% mutate_if(is_character, as_factor)
+glimpse(train)
+```
+### Pure Breed Feature:
+### We will observe if pure breed pets are getting adopted faster than the pets that are not pure breed.
+
+
+```{r}
+not_pure <- c("Domestic Short Hair", "Domestic Medium Hair", "Domestic Long Hair", "Mixed Breed")
+train$pure_breed <- ifelse(train$MainBreed %in% not_pure, 0, 1)
+
+train %>% filter(pure_breed==1) %>% count(Type, MainBreed) %>% group_by(Type) %>% top_n(10, n) %>%
+ggplot(aes(x=reorder(MainBreed, -n), y=n))+
+geom_bar(stat="identity", fill="blue") +
+facet_wrap(~Type, scales = "free_x") +
+theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+labs(x="Most common pure breeds", y="number of pets")
+```
+```{r}
+train %>% count(AdoptionSpeed, pure_breed) %>%
+ggplot(aes(x=AdoptionSpeed, y=n, fill=as.factor(pure_breed))) +
+geom_bar(stat="identity", position="fill") +
+theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+guides(fill=guide_legend(title="Pure Breed")) +
+scale_y_continuous(labels=percent) +
+labs(x="", y="percent")
+```
+### As pure breed pets have faster adoption rate, a new variable is created to identify pure breed pets.
+
+```{r}
+tr_te <- left_join(tr_te, state_labels %>% dplyr::rename(State=StateID), by="State")
+tr_te <- left_join(tr_te, breed_labels %>% dplyr::select(Breed1=BreedID, MainBreed=BreedName), by="Breed1")
+
+#creating Has Name variable
+tr_te$has_name <- ifelse(is.na(tr_te$Name), 0, 1)
+
+#creating Pure Breed variable
+not_pure <- c("Domestic Short Hair", "Domestic Medium Hair", "Domestic Long Hair", "Mixed Breed")
+tr_te$pure_breed <- ifelse(tr_te$MainBreed %in% not_pure, 0, 1)
+
+#making Not Specified in ordinal factors NA (just in case there are any in stage 2)
+tr_te$MaturitySize[tr_te$MaturitySize==0] <- NA
+tr_te$FurLength[tr_te$FurLength==0] <- NA
+tr_te$Health[tr_te$Health==0] <- NA
+
+categorical_vars <- c("Type", "Gender", "Vaccinated", "Dewormed", "Sterilized", "StateName", "MainBreed", "has_name", "pure_breed", "Breed2", "Color1", "Color2", "Color3")
+
+tr_te <- tr_te %>% dplyr::select(-Name, -Breed1, -RescuerID, -Description, -State, -PetID) %>%
+mutate_at(categorical_vars, funs(factor(.))) %>% mutate_if(is.numeric, as.integer)
+
+glimpse(tr_te)
+```
+
+```{r}
+glimpse(train)
+```
+```{r}
+glimpse(tr_te)
+```
+#### Fast adoption:
+### Adoption speed less than 3 is categorized as high(1) and more than 3 is categorized as low(0).
+```{r}
+High = ifelse(tr_te$AdoptionSpeed<3, "1", "0")
+tr_te = data.frame(tr_te, High)
+```
+
+```{r}
+glimpse(tr_te)
+```
+
+```{r}
+tr_te$High<-as.numeric(tr_te$High)
+```
+```{r}
+glimpse(tr_te)
+```
+```{r}
+library(MASS)
+modelnegb <- glm.nb(High ~ ., data = tr_te)
+
+```
+### Negative Binomial Model:
+```{r}
+summary(modelnegb)
+```
+### Variables with high amount of factors are dropped.
+```{r include=FALSE}
+newtr_te<-tr_te[c(-3,-6,-7,-16,-18,-19)]
+```
+
+### Dividing into train and test set
+### Data is now partitioned into 70% train and 30% test.
+```{r}
+set.seed(100) 
+
+index = sample(1:nrow(newtr_te), 0.7*nrow(newtr_te)) 
+
+train1 = newtr_te[index,] # Create the training data 
+test1 = newtr_te[-index,] # Create the test data
+
+dim(train1)
+dim(test1)
+```
+### Negative binomial model:
+```{r}
+modelnegb1 <- glm.nb(High ~ ., data = train1)
+```
+
+```{r}
+summary(modelnegb1)
+```
+### Negative binomial model with significant variables:
+```{r}
+modelnegb2 <- glm.nb(High~ Age  + FurLength  + Health+
+                as.factor(Gender) +
+                as.factor(Vaccinated) + 
+                as.factor(Sterilized)+
+                as.factor(Color1), data = train1)
+
+summary(modelnegb2)
+```
+
+```{r}
+modelnegb3 <- glm.nb(High~ Age  + FurLength  + Health+
+                as.factor(Gender) +
+                as.factor(Color1), data = train1)
+
+summary(modelnegb3)
+```
+### Linear model with significant variables:
+```{r}
+modellin <- lm(High~ Age  + FurLength  + Health+
+                as.factor(Gender) +
+                as.factor(Vaccinated) + 
+                as.factor(Sterilized)+
+                as.factor(Color1), data = train1)
+
+summary(modellin)
+```
+
+
+
+
+
+```{r}
+library(kableExtra)
+aic1 <- modelnegb$aic
+aic2 <- modelnegb1$aic
+aic3 <- modelnegb2$aic 
+aic4 <- modellin$aic
+mse1 <- mean((train1$High - predict(modelnegb))^2)
+mse2 <- mean((train1$High - predict(modelnegb1))^2)
+mse3 <- mean((train1$High - predict(modelnegb2))^2)
+mse4 <- mean((train1$High - predict(modellin))^2)
+compare_aic_mse <- matrix(c(mse1, mse2, mse3 ,mse4 ,aic1, aic2,aic3,aic4),nrow=4,ncol=2,byrow=TRUE)
+
+
+rownames(compare_aic_mse) <- c("Model1","Model2","Model3","Model4")
+colnames(compare_aic_mse) <- c("MSE","AIC")
+compare_models <- as.data.frame(compare_models)
+
+kable(compare_aic_mse)  %>% 
+  kable_styling(full_width = T)
+```
+### The negative binomial model with significant variables and lower AIC score is selected:
+### We are going to deploy this model on our test data.
+
+
+
+
+
+
+
+```{r}
+pred <- predict(modelnegb2, train1, type = "response")
+summary(pred)
+```
+
+```{r}
+pred1 <- predict(modellin, train1, type = "response")
+summary(pred1)
+```
+
+### It can be observed that based on the prediction that Mean is 0.4953 and Median is 0.518. Wemay need a different model like Binomial, Random Forest or XGBoost.
