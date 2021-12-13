@@ -8,9 +8,13 @@ author:
   Ken Popkin
 date: "Date: `r Sys.Date()` Due: 2021-12-12" 
 output:
-  #rmdshower::shower_presentation
-  rmdformats::material:
-  code_folding: hide
+  bookdown::pdf_document2
+  #revealjs::revealjs_presentation:
+  #  theme: sky
+  #  highlight: pygments
+  #  center: true
+  #rmdformats::material:
+  #code_folding: hide
   #prettydoc::html_pretty:
   #  theme: architect
    # highlight: github
@@ -43,7 +47,7 @@ library(effects)
 library(here)
 ```
 
-# Overview 
+# Overview {data-background="images/background.jpg"}
 
 <insert image of quote>
 ![](images/pets.jpg){width=50%}
@@ -51,7 +55,7 @@ library(here)
 There are millions of stray pets around the world, some of which are fortunate enough to be adopted while many others are not.  While adoption of a pet is often the definition of success, the rate at which a pet is adopted is also a key success factor - pets that take a long time to adopt contribute to over-crowded animal shelters and can prevent taking on new strays.  Sadly, pets that are not adopted eventually need to be euthanized.
 
 ## Learn more about the data
-[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
+^[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
 
 # What to Predict
 Predictor (Adoption Speed)<br> 
@@ -236,7 +240,8 @@ Here we can see the model works really well on the train data, we need to use it
 # BLR Predictions 
 
 When we apply the model to the evaluation data we get the following results.
-```{r echo=FALSE, fig.height=2.5, message=FALSE, warning=FALSE, paged.print=TRUE}
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 evaluation2 <- read.csv(here("data","TestData","test_cleaned.csv"))
 
 evaluation2 <- transform(
@@ -361,12 +366,12 @@ With the data provided, our best fitted models were the **OLR** and the **BLR**.
 
 ### References 
 
-[Kaggle - About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)<br/>
-[UCLA - Ordinary Logistic Regression](https://stats.idre.ucla.edu/r/dae/ordinal-logistic-regression/)<br/>
-[TowardsDataScience - Random Forest in R](https://towardsdatascience.com/random-forest-in-r-f66adf80ec9)<br/>
-[Toward Data Science - OLR](https://towardsdatascience.com/implementing-and-interpreting-ordinal-logistic-regression-1ee699274cf5).
+Kaggle - About the data. "https://www.kaggle.com/c/petfinder-adoption-prediction/data"<br/>
+UCLA - Ordinary Logistic Regression. "https://stats.idre.ucla.edu/r/dae/ordinal-logistic-regression/"<br/>
+TowardsDataScience - Random Forest in R. "https://towardsdatascience.com/random-forest-in-r-f66adf80ec9"<br/>
+Toward Data Science - OLR. "https://towardsdatascience.com/implementing-and-interpreting-ordinal-logistic-regression-1ee699274cf5".<br/>
 
 ### Notable Links
-[Project Github](https://github.com/akarimhammoud/Data_621/tree/main/Final%20Project)<br/>
-[Visualizations](https://rpubs.com/krpopkin/846476)
+Project Github. "https://github.com/akarimhammoud/Data_621/tree/main/Final%20Project"<br/>
+Visualizations. "https://rpubs.com/krpopkin/846476"
 
