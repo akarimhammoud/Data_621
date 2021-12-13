@@ -7,7 +7,7 @@ author: "Group 2"
 There are millions of stray pets around the world, some of which are fortunate enough to be adopted while many others are not.  While adoption of a pet is often the definition of success, the rate at which a pet is adopted is also a key success factor - pets that take a long time to adopt contribute to over-crowded animal shelters and can prevent taking on new strays.  Sadly, pets that are not adopted eventually need to be euthanized.
 
 ### Learn more about the data
-[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
+^[About the data](https://www.kaggle.com/c/petfinder-adoption-prediction/data)
 
 ### What to Predict
 Predictor (Adoption Speed) Description: Predict how quickly, if at all, a pet is adopted.
