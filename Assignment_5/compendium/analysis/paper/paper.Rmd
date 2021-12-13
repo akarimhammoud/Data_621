@@ -1,0 +1,557 @@
+---
+title: DS621-Homework 5
+author:
+  - name: George Cruz Deschamps
+    email: georg4re@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Karim Hammoud
+    email: cunykarim@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Maliat Islam
+    email: maliat.islam21@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Matthew Lucich
+    email: matt.lucich@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Gabriella Martinez
+    email: gpmmrtzz@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+  - name: Ken Popkin
+    email: krpopkin@gmail.com
+    affiliation: Critical Thinking Group 2 - DS621
+abstract: |
+  A large wine manufacturer is studying the data in order to predict the number of wine cases ordered based upon the wine characteristics. If the wine manufacturer can predict the number of cases, then that manufacturer will be able to adjust their wine offering to maximize sales.
+  Our objective is to build a count regression model to predict the number of cases of wine that will be sold given certain properties of the wine.
+
+journal: "Homework 5 - A Wine Predictor"
+date: "`r Sys.Date()`"
+bibliography: mybibfile.bib
+#linenumbers: true
+#numbersections: true
+preamble: |
+  \usepackage[nomarkers]{endfloat}
+csl: elsevier-harvard.csl
+output: rticles::elsevier_article
+---
+```{r libraries, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, 
+                      dev="cairo_pdf", fig.width=6, fig.height=3.5)
+library(dplyr)
+library(reshape)
+library(ggplot2)
+library(purrr)
+library(psych)
+library(tidyr)
+library(here)
+library(ggthemes)
+library(gtsummary)
+library(naniar)
+library(MASS)
+library(pscl)
+source(here("R","draw_confusion_matrix.R"), local = knitr::knit_global())
+```
+
+```{r set-theme}
+theme_set(theme_grey())
+```
+\newpage
+Data Exploration
+===================
+
+Let's take an initial look at our data.  The summary looks like this: 
+```{r echo=FALSE}
+# load data
+data <- read.csv(
+  here("analysis", "data", "raw_data","wine-training-data.csv"),
+  fileEncoding = 'UTF-8-BOM')
+data %>% dplyr::select(-INDEX) %>%
+  tbl_summary(
+    statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,
+    missing_text = "(Missing)"
+)
+```
+
+
+```{r echo=FALSE}
+# load data
+eval_data <- read.csv(
+  here("analysis", "data", "raw_data","wine-evaluation-data.csv"),
+    fileEncoding = 'UTF-8-BOM')
+
+```
+
+Our dataset consists of 15 variables and 12,795 observations.  There are some missing values on ResidualSugar, Chlorides, FreeSulfurDioxide, TotalSulfurDioxide, pH, Sulphates, Alcohol, and STARS variables. TARGET is our response variable. LabelAppeal, AcidIndex, and STARS are discrete variables and the rest are continuous. 
+
+```{r}
+instances = dim(data)[1]
+features = dim(data)[2]
+cat('Dataset for this assignment is', instances, 'instances and', features, 'features')
+```
+
+**Missing Values Count:**
+```{r}
+map(data, ~sum(is.na(.))) %>% as.data.frame %>% tibble::rownames_to_column() %>%  
+  tidyr::pivot_longer(-rowname) %>% 
+  tidyr::pivot_wider(names_from=rowname, values_from=value) %>%
+  set_names(c("Variable", "Missing")) %>%
+  filter(Missing > 0) %>%
+  knitr::kable()
+  
+```
+```{r fig.align='center'}
+data %>% gg_miss_upset
+```
+
+\newpage
+### Data Visualization
+
+<br>
+In the box plots below, we can see `TotalSulfurDioxide`, `FreeSulfurDioxide`, and `ResidualSugar` variables have large ranges compared to the other variables. We can tell a high number of variables have outliers. Almost all of the variables are centered around zero and at least four of the variables have negative values.
+
+```{r fig.height=6, fig.align='center'}
+meltData <- data %>% 
+  dplyr::select(-INDEX) %>%
+  melt
+bp <- meltData %>% 
+  ggplot( aes(x=value, y=variable, fill=variable)) + 
+  geom_boxplot()+
+  labs(title="Plot of value per variable",x="Value", y = "Variable")
+bp
+```
+
+```{r fig.height = 6, fig.align='center'}
+ggplot(meltData, aes(factor(variable), value)) + 
+  geom_boxplot(color="grey", fill="orange", alpha=0.2) + 
+  facet_wrap(~variable, scale="free")
+```
+
+\newpage
+### Data correlations
+
+We also take a look at the correlation between the variables. 
+
+```{r}
+res_vector  <- vector()
+colnames_vector <- colnames(data)
+
+for(i in 1:ncol(data)) {
+  
+  res <- cor.test(data[ , i], data$TARGET, 
+                    method = "pearson")
+  
+  res_round = round(res$estimate,4)
+  
+  res_vector <- c(res_vector, res_round)
+}
+
+corrdf <- data.frame(colnames_vector, res_vector)
+corrdf_sort <- corrdf %>% arrange(desc(res_vector))
+
+#Remove TARGET from correlation df
+corrdf_sort = corrdf_sort[-c(1),]
+
+knitr::kable(corrdf_sort)
+```
+
+```{r fig.align='center'}
+#Plot the correlations
+ggplot(corrdf_sort, aes(x=reorder(colnames_vector,res_vector), y=res_vector)) +
+  geom_bar(stat="identity") +
+  theme(axis.text.x = element_text(angle = 90, size = 10))
+```
+
+In the above correlation table and plot `STARS` and `LabelAppeal` appear to be most positively correlated variables with the response variable. We can also see some mild negative correlation between the response variable and `AcidIndex`.
+
+\newpage
+Data Manipulation
+===================
+### Recommendations
+
+1. **Address Missing Values**
+The features below have missing values.  Recommendation to address this for each feature is:  
+a. <I>**Residual Sugar (616):**</I> replace missing values with mean because normal dist, corr w/target is 0, & most target values have a similar mean. <br>
+b. <I>**Chlorides (638):**</I> same as Residual Sugar (replace with mean)<br>
+c. <I>**Free Sulfur Dioxide (647):**</I> same as Residual Sugar  <br>
+d. <I>**Total Sulfur Dioxide (682):**</I> same as Residual Sugar (considered using median, but mean is 120 and median is 123, so not much difference)  <br>
+e. <I>**PH (395):**</I> same as Residual Sugar <br>
+f. <I>**Sulphates (1210):**</I> same as Residual Sugar<br>  
+g. <I>**Alcohol (653):**</I> replace missing values with mean.  Correlation is higher on this feature at around 12%  <br>
+h. <I>**STARS (3359):**</I> values are 1 to 4.  replace missing values with a 0 to indicate no ranking provided. <br>
+<br>
+
+2. **Apply Scalar** 
+Max values are wide ranging across the features. For example, `Volatile Acidity`'s max value is 4 and `SulfurDioxide's` max value is 1038.  Recommend applying StandardScalar prior to modeling.
+
+```{r}
+#Fill in missing values in training data
+data_mv <- COPY<-data.frame(data)
+
+data_mv = data_mv %>% replace_na(list(STARS = 0))
+
+for(i in 1:ncol(data_mv)){
+  data_mv[is.na(data_mv[,i]), i] <- mean(data_mv[,i], na.rm = TRUE)
+}
+```
+
+```{r}
+#Fill in missing values in evaluation data
+eval_data_mv <- COPY<-data.frame(eval_data)
+
+eval_data_mv = eval_data_mv %>% replace_na(list(STARS = 0))
+
+for(i in 1:ncol(eval_data_mv)){
+  eval_data_mv[is.na(eval_data_mv[,i]), i] <- mean(eval_data_mv[,i], na.rm = TRUE)
+}
+
+```
+
+
+```{r}
+#Apply scalarization to training and evaluation data
+data_mv_scaled <- scale(data_mv)
+
+eval_data_mv_scaled <- scale(eval_data_mv,
+                             center=attr(data_mv_scaled,
+                                         "scaled:center"), 
+                              scale=attr(data_mv_scaled,
+                                         "scaled:scale")
+                             )
+
+```
+
+```{r}
+#Training
+write.csv(data_mv,
+          here("analysis",
+               "data",
+               "derived_data",
+               "wine-training-data-mv.csv")
+          )
+write.csv(data_mv_scaled,
+          here("analysis",
+               "data",
+               "derived_data",
+               "wine-training-data-mv-scaled.csv")
+          )
+
+#Evaluation
+write.csv(eval_data_mv,
+          here("analysis",
+               "data",
+               "derived_data",
+               "wine-evaluation-data-mv.csv")
+          )
+write.csv(eval_data_mv_scaled,
+          here("analysis",
+               "data",
+               "derived_data",
+               "wine-evaluation-data-mv-scaled.csv")
+          )
+```
+
+\newpage
+Data Modeling
+===================
+
+### Poisson model (with inputted missing values)
+
+```{r}
+#m_poisson <- data_mv %>% 
+#  dplyr::select(-INDEX) %>% 
+#  glm(TARGET ~  ., data = ., family=poisson)
+#saveRDS(m_poisson, here("analysis",
+#                        "data",
+#                        "derived_data",
+#                        "m_poisson.rds"))
+
+```
+
+```{r}
+m_poisson <- readRDS(here("analysis",
+                        "data",
+                        "derived_data",
+                        "m_poisson.rds"))
+tbl_regression(m_poisson, exponentiate = TRUE)
+```
+
+### Poisson model with significant variables.
+```{r}
+#m_poisson2 <- data_mv %>%
+#              dplyr::select(c(TARGET, VolatileAcidity, AcidIndex, STARS)) %>%
+#              glm(TARGET ~ .,
+#                  data = ., 
+#                  family=poisson)
+#saveRDS(m_poisson2, here("analysis",
+#                        "data",
+#                        "derived_data",
+#                        "m_poisson2.rds"))
+
+```
+
+```{r}
+m_poisson2 <- readRDS(here("analysis",
+                        "data",
+                        "derived_data",
+                        "m_poisson2.rds"))
+tbl_regression(m_poisson2, exponentiate = TRUE)
+```
+
+```{r}
+data_scale_train<-data.frame(data_mv_scaled)
+```
+
+### Negative Binomial (with inputted missing values)
+
+```{r}
+#neg_b <- glm.nb(TARGET ~ ., data = data_mv)
+#saveRDS(neg_b, here("analysis",
+#                        "data",
+#                        "derived_data",
+#                        "neg_b.rds"))
+
+```
+
+```{r}
+neg_b <- readRDS(here("analysis",
+                        "data",
+                        "derived_data",
+                        "neg_b.rds"))
+tbl_regression(neg_b, exponentiate = TRUE)
+```
+
+### Negative binomial model with significant values.
+
+```{r}
+#neg_b2 <- glm.nb(TARGET~ VolatileAcidity + FreeSulfurDioxide + TotalSulfurDioxide +
+#                   Alcohol +
+#                   as.factor(LabelAppeal) +
+#                   as.factor(AcidIndex) + 
+#                   as.factor(STARS), data = data_mv)
+#saveRDS(neg_b2, here("analysis",
+#                     "data",
+#                     "derived_data",
+#                     "neg_b2.rds"))
+
+```
+
+```{r}
+neg_b2 <- readRDS(here("analysis",
+                        "data",
+                        "derived_data",
+                        "neg_b2.rds"))
+tbl_regression(neg_b2, exponentiate = TRUE)
+```
+
+### Linear Model with scaled significant data.
+
+```{r}
+#linear_m <- lm(TARGET~ VolatileAcidity + 
+#                 FreeSulfurDioxide + 
+#                 TotalSulfurDioxide + 
+#                 Alcohol +
+#                 as.factor(LabelAppeal) +
+#                 as.factor(AcidIndex) + 
+#                 as.factor(STARS),
+#               data = data_scale_train)
+#saveRDS(linear_m, here("analysis",
+#                     "data",
+#                     "derived_data",
+#                     "linear_m.rds"))
+
+```
+
+```{r}
+linear_m <- readRDS(here("analysis",
+                        "data",
+                        "derived_data",
+                        "linear_m.rds"))
+tbl_regression(linear_m)
+```
+
+### Linear model without the scaled value.
+
+```{r}
+#lm_unscaled <- lm(TARGET ~ ., data = data_mv)
+
+#saveRDS(lm_unscaled, here("analysis",
+#                     "data",
+#                     "derived_data",
+#                     "lm_unscaled.rds"))
+
+```
+
+```{r}
+lm_unscaled <- readRDS(here("analysis",
+                        "data",
+                        "derived_data",
+                        "lm_unscaled.rds"))
+tbl_regression(lm_unscaled)
+```
+
+### Zero inflation with inputted Missing Values.
+
+```{r}
+#zero_inf <- zeroinfl(TARGET ~ . | STARS,
+#                     data = data_mv,
+#                     dist = 'negbin')
+#saveRDS(zero_inf, here("analysis",
+#                     "data",
+#                     "derived_data",
+#                     "zero_inf.rds"))
+
+```
+
+```{r}
+zero_inf <- readRDS(here("analysis",
+                        "data",
+                        "derived_data",
+                        "zero_inf.rds"))
+summary(zero_inf)
+```
+
+```{r}
+scatterPreds <- predict(zero_inf, data_mv)
+qplot(data_mv$TARGET, scatterPreds, main = 'Predicted vs Actual') + ggthemes::theme_tufte()
+```
+
+
+The scaled dataset was transformed into absolute value dataset as Poisson and Negative Binomial were unable to work with negative data.
+
+### Absolute Value Poisson
+
+```{r}
+#Absolute Value
+absdata <- abs(data_scale_train)
+
+#abs_poisson <- glm(TARGET ~  ., data=absdata, family=poisson)
+#saveRDS(abs_poisson, here("analysis",
+#                    "data",
+#                     "derived_data",
+#                     "abs_poisson.rds"))
+
+```
+
+```{r}
+abs_poisson <- readRDS(here("analysis",
+                        "data",
+                        "derived_data",
+                        "abs_poisson.rds"))
+summary(abs_poisson)
+```
+
+### Model Selection
+
+Let's select the models: 
+
+```{r}
+aic1 <- m_poisson$aic
+aic2 <- m_poisson2$aic
+aic3 <- neg_b$aic
+aic4 <- neg_b2$aic
+aic5 <- linear_m$aic
+aic6 <- lm_unscaled$aic
+aic7 <- zero_inf$aic
+aic8 <- abs_poisson$aic
+
+mse1 <- mean((data_mv$TARGET - predict(m_poisson))^2)
+mse2 <- mean((data_mv$TARGET - predict(m_poisson2))^2)
+mse3 <- mean((data_mv$TARGET - predict(neg_b))^2)
+mse4 <- mean((data_mv$TARGET - predict(neg_b2))^2)
+mse5 <- mean((data_scale_train$TARGET - predict(linear_m))^2)
+mse6 <- mean((data_mv$TARGET - predict(lm_unscaled))^2)
+mse7 <- mean((data_mv$TARGET - predict(zero_inf))^2)
+mse8 <- mean((absdata$TARGET - predict(abs_poisson))^2)
+```
+
+```{r}
+compare_aic_mse <- matrix(c(mse1, mse2, mse3, mse4, mse5, mse6, mse7, mse8, aic1, aic2, aic3, aic4, aic5, aic6, aic7, aic8),nrow=8,ncol=2,byrow=TRUE)
+```
+
+```{r}
+
+rownames(compare_aic_mse) <- c("Poisson","Reduced Poisson","Neg Binomial","Neg Binomial Reduced","Linear Model","LM Unscaled","Zero Inflation","Poisson Abs")
+colnames(compare_aic_mse) <- c("MSE","AIC")
+compare_models <- as.data.frame(compare_aic_mse)
+```
+
+```{r}
+knitr::kable(compare_models)  
+
+eval_data_mv<-data.frame(eval_data_mv)
+```
+Lower AIC and MSE Values indicate a better model.
+
+Several models have a lower AIC and MSE value.
+<br>
+1. The negative binomial model with data_mv dataset.
+2. The negative binomial model with only significant value. 
+3. The linear model with significant values from the scaled dataset.
+4. The linear model with data_mv dataset.
+5. The Scaled Poisson model with absolute values.
+
+### Test Data
+Now lets see the output of the Models using test data.
+
+```{r}
+modelValidation <- function(mod,eval_data_mv){
+  preds = predict(mod, data= eval_data_mv)
+  diffMat = as.numeric(preds) - as.numeric(eval_data_mv$TARGET)
+  diffMat = diffMat^2
+  loss <- mean(diffMat)
+  return(loss)
+}
+
+df1<-data.frame(modelValidation(m_poisson,data_mv))
+df2<-data.frame(modelValidation(m_poisson2,data_mv))
+df3<-data.frame(modelValidation(neg_b,data_mv))
+df4<-data.frame(modelValidation(neg_b2,data_mv))
+df5<-data.frame(modelValidation(linear_m,data_scale_train))
+df6<-data.frame(modelValidation(lm_unscaled,data_mv))
+df7<-data.frame(modelValidation(zero_inf,data_mv))
+df8<-data.frame(modelValidation(abs_poisson,absdata))
+library(kableExtra)
+compare_model1 <- c(df1)
+compare_model2 <- c(df2)
+compare_model3 <- c(df3)
+compare_model4 <- c(df4)
+compare_model5 <- c(df5)
+compare_model6 <- c(df6)
+compare_model7 <- c(df7)
+compare_model8 <- c(df8)
+
+compare <- data.frame(compare_model1, compare_model2, compare_model3, compare_model4, compare_model5, compare_model6,compare_model7,compare_model8)
+colnames(compare) <- c("Poisson", "Reduced Poisson", "Neg Binomial", "Neg Binomial Reduced", "Linear Model", "LM Unscaled","Zero Inflation","Abs Poisson")
+
+knitr::kable(t(compare))
+```
+
+
+### Conclusions 
+
+We have used squared loss to validate the model. We will use the squared difference to select a model (MSE) from predictions on the training sets. As a lower number indicates a better fit model, (Poisson model with scaled absolute value dataset) will be selected.
+
+\newpage
+References 
+==========
+
+Kieran Healy. "Data Visualization | A practical introduction". Duke University<br>
+https://socviz.co/modeling.html#modeling.<br>
+Accessed 22 Nov. 2021. 
+
+"Best subset model selection with R."<br>
+http://jadianes.me/best-subset-model-selection-with-R.<br>
+Accessed 22 Nov. 2021.
+
+"ZERO-INFLATED POISSON REGRESSION | R DATA ANALYSIS EXAMPLES."<br>
+https://stats.idre.ucla.edu/r/dae/zip/.<br> 
+Accessed 22 Nov. 2021.
+
+“Introduction.” R-Packages<br> cran.r-project.org/web/packages/gtsummary/vignettes/tbl_summary.html.<br>
+Accessed 22 Nov. 2021.
+
+Kristalli, Anna. “Reproduce a Paper in Rmd.” Annakrystalli.me,<br> annakrystalli.me/rrtools-repro-research/paper.html#render_final_document_to_pdf.<br> Accessed 22 Nov. 2021.
+
+
+
