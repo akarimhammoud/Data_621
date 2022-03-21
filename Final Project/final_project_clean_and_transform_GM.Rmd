@@ -83,8 +83,8 @@ library(effects)
 ## Load Data
 
 ```{r}
-# load data https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TrainingData/traindatawithbreedname.csv
-data <- read.csv('./data/TrainingData/traindatawithbreedname.csv')
+#load data https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TrainingData/traindatawithbreedname.csv
+data <- read.csv('https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TrainingData/traindatawithbreedname.csv')
 #data <- read.csv('./data/TestData/test.csv')
 head(data,2)
 ```
@@ -334,6 +334,10 @@ data$breedname <- fct_collapse(data$breedname,
 data$purebreed <- ifelse(data$breedname != "Mixed Breed", "Yes", "No")
 
 data$purebreed<-  as.factor(data$purebreed)
+
+data$solidcolor <- ifelse(data$NumColors != "1", "Yes", "No")
+
+data$solidcolor <- as.factor(data$solidcolor)
 ```
 
 
@@ -347,6 +351,7 @@ data <- data %>%
 
 str(data)
 ```
+
 ### Visualizing missing data
 
 ```{r fig.height=7, fig.width=10}
@@ -362,13 +367,13 @@ train_data <- data
 #remove NA
 train_data <-train_data %>% 
   dplyr::select(-c(VideoAmt,Color2,Color3))
+train_data <- na.omit(train_data)
 ```
 
 ```{r}
 map(train_data, ~sum(is.na(.))) %>% t()
 missmap(train_data, main = "Missing vs Observed Values")
 ```
-
 
 ### Dog Breed Word Cloud
 
@@ -426,19 +431,28 @@ The values are determined in the following way:
 Below we see that most dogs don't get adopted after 100 days of being listed. The next highest level would be adoption within the first month of listing.
 ```{r}
 
+train_data2 <- train_data
+train_data2$AdoptionSpeed <- recode_factor(train_data2$AdoptionSpeed,"0"= "Same Day", 
+                                "1"= "First Week", 
+                                "2"= "Second and Third Week", 
+                                "3"= "First Month", 
+                                "4"= "100+ days no adoption")
+
 #fct_reorder(factor(AdoptionSpeed),Count
-train_data %>% 
+train_data2 %>% 
   group_by(AdoptionSpeed) %>%
   summarise(Count = length(AdoptionSpeed)) %>% 
-  ggplot(aes(x=(AdoptionSpeed), 
+  ggplot(aes(x=fct_reorder(factor(AdoptionSpeed),Count), 
              y= Count))+
-  geom_col(position="dodge", fill= "steelblue")+
-  geom_text(aes(label = Count, vjust = 1))+
-  #coord_flip()+
-  labs(x= "Adoption Speed", y = "Count")+
+  geom_col(width = 0.6, position="dodge", fill= "steelblue")+
+  #geom_text(aes(label = Count, vjust = 1))+
+  coord_flip()+
+  labs(title= "How long are pets listed before getting adopted?",
+       x= "Adoption Speed", y = "Number of Listings")+
   theme_minimal()
 
 ```
+
 
 ```{r message=FALSE, warning=FALSE}
 train_data %>% 
@@ -598,12 +612,38 @@ train_data <- train_data %>%
 summary(train_data)
 ```
 
-
 ```{r fig.height=8, fig.width=10}
 ggplot(train_data, aes(x = euth_risk, y = AgeYears, fill = euth_risk)) +
   geom_boxplot(size = .75) +   facet_grid(MaturitySize ~ Gender, margins = FALSE) +   
   theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))
 ```
+
+```{r message=FALSE, warning=FALSE}
+subeset <- train_data %>% 
+  dplyr::select('MaturitySize','Type', 'euth_risk')
+
+#class(subeset)
+
+table1 <- addmargins(table(subeset$MaturitySize,subeset$Type, subeset$euth_risk))
+
+#print.table(table1)
+
+df <- as.data.frame(table1)
+
+df <- subset(df, Var1 != "Sum" & Var2 != "Sum" & Var3 != "Sum") # & Var2 != "Mixed"
+```
+
+```{r}
+library(ggpubr)
+ggballoonplot(df, x= 'Var1', y='Var2', size = "Freq",
+              fill = "Freq", facet.by = "Var3",
+              ggtheme = theme_bw())+
+  scale_fill_viridis_c(option = "D")+
+  ggtitle("Euthansia risk for cats and dogs by size")+
+  theme(text = element_text(face = "bold"),
+    plot.title = element_text(hjust = 0.5, face="bold"))
+```
+
 
 ### ORDINAL LOGISTIC REGRESSION
 
@@ -653,10 +693,10 @@ In this section, we’ll update our model by removing the the predictor variable
 VIF score for the predictor variables `Vaccinated` and `Dewormed` is high (VIF = 7.0, 6.2). This might be problematic. As such we will remove them and replace the two with `AllMeds` Since the `AllMeds` variable is a combination of `Vaccinated`, `Dewormed`, and `Steriliezed`, `Sterilized` will also be removed.
 
 ```{r}
-model_2 <- polr(euth_risk~ Type+(Gender+Color1+MaturitySize+
+model_2 <- polr(euth_risk~ Type+(Gender+solidcolor+Color1+MaturitySize+
                                  FurLength+Health+Quantity+
                                  Fee+PhotoAmt+AgeYears+
-                                 NumColors+purebreed+
+                                purebreed+
                                  AllMeds), 
               train_data, 
               Hess=TRUE)
@@ -694,7 +734,7 @@ summary_table <- cbind(summary_table, "p value" = round(pval,3))
 summary_table
 ```
 
-Once again, we repeat the process of removing one variable for due to the p values obeserved.
+Once again, we repeat the process of removing one variable for due to the p values observed.
 ```{r}
 model_4 <- polr(euth_risk~ Type+FurLength+Quantity+
                                  Fee+PhotoAmt+AgeYears+purebreed+
@@ -740,7 +780,7 @@ A significant test statistic provides evidence that the parallel regression assu
 evaluation <- read.csv("https://raw.githubusercontent.com/akarimhammoud/Data_621/main/Final%20Project/data/TestData/test_cleaned.csv")
 ```
 
-```{r include=FALSE}
+```{r}
 #Gender+Color1+MaturitySize+FurLength+Health+Quantity+Fee+PhotoAmt+AgeYears+NumColors+purebreed+Vaccinated+Dewormed+Sterilized
 
 evaluation$AllMeds = evaluation$Vaccinated + evaluation$Dewormed + evaluation$Sterilized
@@ -784,6 +824,11 @@ evaluation$purebreed <- ifelse(evaluation$Breed1 != 307, "Yes", "No")
 evaluation$purebreed <-  as.factor(evaluation$purebreed)
 
 evaluation$NumColors <- as.factor(evaluation$NumColors)
+
+evaluation$solidcolor <- ifelse(evaluation$NumColors != "1", "Yes", "No")
+
+evaluation$solidcolor <- as.factor(evaluation$solidcolor)
+
 evaluation$AllMeds <- as.factor(evaluation$AllMeds)
 
 evaluation$AgeYears <- as.numeric(evaluation$AgeYears)
@@ -792,9 +837,15 @@ evaluation = subset(evaluation, select = -c(Breed1, Color2, Color3,
                                             Vaccinated, Dewormed, Sterilized, 
                                             State, VideoAmt))
 ```
-After cleaning and selecting the `evalutaion` correpsonding to our `train_data` used in `model_2`, we have:
+After cleaning and selecting the `evalutaion` corresponding to our `train_data` used in `model_2`, we have:
 ```{r}
 str(evaluation)
+```
+
+```{r}
+train_data3 <- train_data %>% 
+  dplyr::select(c(Type, Gender,solidcolor,Color1,MaturitySize,FurLength,Health, Quantity, Fee,
+           PhotoAmt,AgeYears,NumColors,AllMeds,purebreed,euth_risk))
 ```
 
 
@@ -806,6 +857,28 @@ head(pred, 1)
 ```
 
 This model predicts that our Evaluation_Pet will be a medium risk of euthanasia where it will adopted in either months 1, 2 or 3 of being listed.
+
+```{r}
+pred <- predict(model_2, train_data3)
+
+#confusion matrix for training data
+tab <- table(pred,train_data3$euth_risk)
+
+#misclassification error
+1-sum(diag(tab))/sum(tab)
+
+```
+
+### Confusion Matrix
+
+Below is our confusion matrix for our `model_2` ^[https://cran.r-project.org/web/packages/cvms/vignettes/Creating_a_confusion_matrix.html]
+```{r}
+library(cvms)
+conf_mat <- confusion_matrix(targets = train_data3$euth_risk,
+                             predictions = pred)
+
+plot_confusion_matrix(conf_mat$`Confusion Matrix`[[1]])
+```
 
 
 _____
